@@ -1,0 +1,59 @@
+# Docker Compose Override Example
+#
+# This file demonstrates how to customize the Docker Compose configuration
+# without modifying the main docker-compose.yml file.
+#
+# To use this file:
+# 1. Copy it to docker-compose.override.yml:
+#    cp docker-compose.override.example docker-compose.override.yml
+#
+# 2. Customize the settings below
+#
+# 3. Start the service (override will be automatically applied):
+#    docker-compose up -d
+
+version: '3.8'
+
+services:
+  ipwatcher:
+    # Override the image to use a specific version
+    # image: ipwatcher:v1.0.0
+
+    # Change the container name
+    # container_name: my-ipwatcher
+
+    # Use a different user/group
+    # user: "1001:1001"
+
+    # Add timezone
+    environment:
+      - TZ=America/New_York
+
+    # Use different config file location
+    # volumes:
+    #   - /path/to/your/config.yaml:/config/config.yaml:ro
+    #   - /path/to/your/logs:/logs
+
+    # Change logging configuration
+    # logging:
+    #   driver: "syslog"
+    #   options:
+    #     syslog-address: "tcp://192.168.1.100:514"
+
+    # Add labels for monitoring/management
+    # labels:
+    #   - "com.example.environment=production"
+    #   - "com.example.department=infrastructure"
+
+    # Change restart policy
+    # restart: always
+
+    # Add resource limits
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '0.5'
+    #       memory: 128M
+    #     reservations:
+    #       cpus: '0.25'
+    #       memory: 64M

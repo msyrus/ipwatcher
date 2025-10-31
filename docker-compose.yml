@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  ipwatcher:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ipwatcher
+    restart: unless-stopped
+
+    # Environment variables
+    environment:
+      - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN}
+      - CONFIG_FILE=/config/config.yaml
+
+    # Mount configuration
+    volumes:
+      - ./config.yaml:/config/config.yaml:ro
+      - ./logs:/logs
+
+    # Run as non-root user (adjust UID/GID as needed)
+    user: "1000:1000"
+
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+
+    # Read-only root filesystem
+    read_only: true
+
+    # Minimal capabilities
+    cap_drop:
+      - ALL
+
+    # Network mode (host network needed to detect public IP correctly)
+    network_mode: bridge
+
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # Health check
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep ipwatcher || exit 1"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

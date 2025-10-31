@@ -1,0 +1,32 @@
+[Unit]
+Description=IP Watcher - Dynamic DNS updater for Cloudflare
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ipwatcher
+Group=ipwatcher
+WorkingDirectory=/opt/ipwatcher
+ExecStart=/opt/ipwatcher/ipwatcher
+Restart=on-failure
+RestartSec=10
+
+# Environment
+EnvironmentFile=/opt/ipwatcher/.env
+Environment="CONFIG_FILE=/opt/ipwatcher/config.yaml"
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/ipwatcher/logs
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ipwatcher
+
+[Install]
+WantedBy=multi-user.target

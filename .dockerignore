@@ -1,0 +1,65 @@
+# Git
+.git
+.gitignore
+
+# Build artifacts
+ipwatcher
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Documentation
+README.md
+QUICKSTART.md
+LICENSE
+
+# Scripts
+install.sh
+uninstall.sh
+*.sh
+
+# Config files (will be mounted)
+config.yaml
+.env
+
+# Logs
+logs/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Dependencies
+vendor/
+
+# Test files
+*_test.go
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Docker
+docker-compose.yml
+.dockerignore
+
+# Systemd
+*.service
+systemd-override.example
+
+# Go workspace
+go.work
+go.work.sum
+
+# Makefile
+Makefile

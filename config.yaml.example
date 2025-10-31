@@ -1,0 +1,38 @@
+# IP Watcher Configuration
+
+# Refresh rate: How many times per second to check for IP changes (e.g., 0.1 = once every 10 seconds)
+refresh_rate: 0.1
+
+# Sync rate: How many times per minute to verify DNS records are up-to-date (e.g., 1 = once per minute)
+sync_rate: 1
+
+# DNS Records to manage
+# Each domain must have a zone_id (found in Cloudflare dashboard)
+domains:
+  - zone_name: "example.com"
+    records:
+      - name: "@"  # Root domain
+        type: A              # IPv4
+        proxied: false       # Whether to proxy through Cloudflare
+      - name: "@"
+        type: AAAA           # IPv6
+        proxied: false
+      - name: "www"  # Subdomain
+        type: A
+        proxied: true
+      - name: "www"
+        type: AAAA
+        proxied: true
+      - name: "api"
+        type: A
+        proxied: false
+      - name: "vpn"
+        type: A
+        proxied: false
+
+  # Add more domains as needed
+  # - zone_name: "another-domain.com"
+  #   records:
+  #     - name: "@"
+  #       type: A
+  #       proxied: false

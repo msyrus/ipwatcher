@@ -1,0 +1,48 @@
+# Example systemd service override configuration
+#
+# To use this file:
+# 1. Create override directory:
+#    sudo mkdir -p /etc/systemd/system/ipwatcher.service.d/
+#
+# 2. Create override file:
+#    sudo nano /etc/systemd/system/ipwatcher.service.d/override.conf
+#
+# 3. Add customizations (examples below)
+#
+# 4. Reload systemd:
+#    sudo systemctl daemon-reload
+#
+# 5. Restart service:
+#    sudo systemctl restart ipwatcher
+
+# Example: Change user/group
+# [Service]
+# User=myuser
+# Group=mygroup
+
+# Example: Change working directory
+# [Service]
+# WorkingDirectory=/home/myuser/ipwatcher
+
+# Example: Add environment variables
+# [Service]
+# Environment="CONFIG_FILE=/etc/ipwatcher/config.yaml"
+# Environment="LOG_LEVEL=debug"
+
+# Example: Increase restart delay
+# [Service]
+# RestartSec=30
+
+# Example: Limit restart attempts
+# [Service]
+# StartLimitInterval=5min
+# StartLimitBurst=5
+
+# Example: Run before network is fully up
+# [Unit]
+# After=network.target
+# Before=network-online.target
+
+# Example: Email notifications on failure (requires mail configured)
+# [Service]
+# OnFailure=status-email-admin@%n.service
