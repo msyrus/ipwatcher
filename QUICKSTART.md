@@ -100,8 +100,9 @@ sudo journalctl -u ipwatcher -f
 ## Example Configuration
 
 ```yaml
-refresh_rate: 0.1  # Check IP every 10 seconds
-sync_rate: 1       # Verify DNS every minute
+refresh_rate: 0.1    # Check IP every 10 seconds
+sync_rate: 1         # Verify DNS every minute
+supports_ipv6: false # Set to true if your network supports IPv6
 
 domains:
   - zone_name: "example.com"

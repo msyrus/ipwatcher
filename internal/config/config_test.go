@@ -226,10 +226,32 @@ func TestValidate_InvalidRecordType(t *testing.T) {
 	}
 }
 
+func TestValidate_AAAAWithoutIPv6Support(t *testing.T) {
+	cfg := &config.Config{
+		RefreshRate:  0.5,
+		SyncRate:     1.0,
+		SupportsIPv6: false,
+		Domains: []config.Domain{
+			{
+				ZoneName: "example.com",
+				Records: []config.Record{
+					{Name: "example.com", Type: "AAAA", Proxied: false},
+				},
+			},
+		},
+	}
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("Expected error for AAAA record without IPv6 support, got nil")
+	}
+}
+
 func TestValidate_ValidConfig(t *testing.T) {
 	cfg := &config.Config{
-		RefreshRate: 0.5,
-		SyncRate:    1.0,
+		RefreshRate:  0.5,
+		SyncRate:     1.0,
+		SupportsIPv6: true,
 		Domains: []config.Domain{
 			{
 				ZoneName: "example.com",
@@ -249,8 +271,9 @@ func TestValidate_ValidConfig(t *testing.T) {
 
 func TestValidate_MultipleDomainsValid(t *testing.T) {
 	cfg := &config.Config{
-		RefreshRate: 0.5,
-		SyncRate:    1.0,
+		RefreshRate:  0.5,
+		SyncRate:     1.0,
+		SupportsIPv6: true,
 		Domains: []config.Domain{
 			{
 				ZoneName: "example.com",

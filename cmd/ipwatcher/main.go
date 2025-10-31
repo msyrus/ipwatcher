@@ -98,12 +98,14 @@ func (w *IPWatcher) fetchAndUpdateIPs(ctx context.Context) error {
 	}
 
 	// Fetch IPv6
-	ipv6, err := w.ipFetcher.GetIPv6(ctx)
-	if err != nil {
-		log.Printf("Failed to fetch IPv6: %v", err)
-	} else {
-		w.currentIPv6.Store(ipv6)
-		log.Printf("Current IPv6: %s", ipv6)
+	if w.config.SupportsIPv6 {
+		ipv6, err := w.ipFetcher.GetIPv6(ctx)
+		if err != nil {
+			log.Printf("Failed to fetch IPv6: %v", err)
+		} else {
+			w.currentIPv6.Store(ipv6)
+			log.Printf("Current IPv6: %s", ipv6)
+		}
 	}
 
 	// Update DNS records
@@ -121,10 +123,13 @@ func (w *IPWatcher) checkAndUpdateIP(ctx context.Context) error {
 		log.Printf("Failed to fetch IPv4: %v", err)
 	}
 
-	newIPv6, err := w.ipFetcher.GetIPv6(ctx)
-	if err != nil {
-		// IPv6 might not be available, just log it
-		log.Printf("Failed to fetch IPv6: %v", err)
+	newIPv6 := ""
+	if w.config.SupportsIPv6 {
+		newIPv6, err = w.ipFetcher.GetIPv6(ctx)
+		if err != nil {
+			// IPv6 might not be available, just log it
+			log.Printf("Failed to fetch IPv6: %v", err)
+		}
 	}
 
 	// Check if IPs have changed

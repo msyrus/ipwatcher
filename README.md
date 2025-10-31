@@ -68,6 +68,9 @@ refresh_rate: 0.1
 # How many times per minute to verify DNS records (1 = once per minute)
 sync_rate: 1
 
+# Whether your network supports IPv6 (required if using AAAA records)
+supports_ipv6: false
+
 domains:
   - zone_name: "example.com"
     records:
@@ -186,6 +189,9 @@ sudo systemctl restart ipwatcher
 |-------|------|-------------|---------|
 | `refresh_rate` | float | Times per second to check IP changes | `0.1` (every 10s) |
 | `sync_rate` | float | Times per minute to verify DNS records | `1` (every minute) |
+| `supports_ipv6` | bool | Whether your network supports IPv6 | `false` |
+
+**Note**: Set `supports_ipv6` to `true` only if your server has IPv6 connectivity. This is required if you want to use AAAA records.
 
 ### Domain Configuration
 
@@ -203,6 +209,39 @@ sudo systemctl restart ipwatcher
 | `name` | string | Yes | Full domain name (e.g., "example.com" or "www.example.com") |
 | `type` | string | Yes | Record type: `A` (IPv4) or `AAAA` (IPv6) |
 | `proxied` | bool | Yes | Whether to proxy through Cloudflare CDN |
+
+### IPv6 Configuration Example
+
+If your server has IPv6 connectivity, you can manage both A and AAAA records:
+
+```yaml
+refresh_rate: 0.1
+sync_rate: 1
+supports_ipv6: true  # Enable IPv6 support
+
+domains:
+  - zone_name: "example.com"
+    records:
+      # IPv4 record
+      - name: "example.com"
+        type: A
+        proxied: false
+
+      # IPv6 record
+      - name: "example.com"
+        type: AAAA
+        proxied: false
+
+      # Both IPv4 and IPv6 for www
+      - name: "www.example.com"
+        type: A
+        proxied: true
+      - name: "www.example.com"
+        type: AAAA
+        proxied: true
+```
+
+**Important**: AAAA records require `supports_ipv6: true` in the configuration. The daemon will automatically detect your server's IPv6 address and update AAAA records accordingly.
 
 ## Environment Variables
 

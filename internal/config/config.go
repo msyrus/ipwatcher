@@ -9,9 +9,10 @@ import (
 
 // Config represents the application configuration
 type Config struct {
-	RefreshRate float64  `yaml:"refresh_rate"` // Times per second to check IP
-	SyncRate    float64  `yaml:"sync_rate"`    // Times per minute to verify DNS
-	Domains     []Domain `yaml:"domains"`
+	RefreshRate  float64  `yaml:"refresh_rate"` // Times per second to check IP
+	SyncRate     float64  `yaml:"sync_rate"`    // Times per minute to verify DNS
+	SupportsIPv6 bool     `yaml:"supports_ipv6"`
+	Domains      []Domain `yaml:"domains"`
 }
 
 // Domain represents a domain configuration
@@ -73,6 +74,9 @@ func (c *Config) Validate() error {
 			}
 			if record.Type != "A" && record.Type != "AAAA" {
 				return fmt.Errorf("domain %s, record %s: type must be A or AAAA", domain.ZoneName, record.Name)
+			}
+			if record.Type == "AAAA" && !c.SupportsIPv6 {
+				return fmt.Errorf("domain %s, record %s: AAAA record configured but supports_ipv6 is false", domain.ZoneName, record.Name)
 			}
 		}
 	}
