@@ -11,6 +11,63 @@ import (
 	"github.com/cloudflare/cloudflare-go/v6/zones"
 )
 
+// CloudflareClient defines the interface for Cloudflare operations
+// This allows for dependency injection and mocking in tests
+type CloudflareClient interface {
+	ListZones(ctx context.Context, params zones.ZoneListParams) ([]zones.Zone, error)
+	ListDNSRecords(ctx context.Context, params dns.RecordListParams) ([]dns.RecordResponse, error)
+	BatchDNSRecords(ctx context.Context, params dns.RecordBatchParams) (*dns.RecordBatchResponse, error)
+	DeleteDNSRecord(ctx context.Context, recordID string, params dns.RecordDeleteParams) (*dns.RecordDeleteResponse, error)
+}
+
+// RealCloudflareClient wraps the actual Cloudflare client
+type RealCloudflareClient struct {
+	client *cloudflare.Client
+}
+
+// NewRealCloudflareClient creates a new real Cloudflare client wrapper
+func NewRealCloudflareClient(apiToken string) *RealCloudflareClient {
+	client := cloudflare.NewClient(option.WithAPIToken(apiToken))
+	return &RealCloudflareClient{client: client}
+}
+
+// ListZones implements CloudflareClient
+func (r *RealCloudflareClient) ListZones(ctx context.Context, params zones.ZoneListParams) ([]zones.Zone, error) {
+	page, err := r.client.Zones.List(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+	if page == nil {
+		return []zones.Zone{}, nil
+	}
+	return page.Result, nil
+}
+
+// ListDNSRecords implements CloudflareClient
+func (r *RealCloudflareClient) ListDNSRecords(ctx context.Context, params dns.RecordListParams) ([]dns.RecordResponse, error) {
+	cur := r.client.DNS.Records.ListAutoPaging(ctx, params)
+	records := []dns.RecordResponse{}
+	for cur.Next() {
+		if rec := cur.Current(); rec.Type == dns.RecordResponseTypeA || rec.Type == dns.RecordResponseTypeAAAA {
+			records = append(records, rec)
+		}
+	}
+	if err := cur.Err(); err != nil {
+		return nil, err
+	}
+	return records, nil
+}
+
+// BatchDNSRecords implements CloudflareClient
+func (r *RealCloudflareClient) BatchDNSRecords(ctx context.Context, params dns.RecordBatchParams) (*dns.RecordBatchResponse, error) {
+	return r.client.DNS.Records.Batch(ctx, params)
+}
+
+// DeleteDNSRecord implements CloudflareClient
+func (r *RealCloudflareClient) DeleteDNSRecord(ctx context.Context, recordID string, params dns.RecordDeleteParams) (*dns.RecordDeleteResponse, error) {
+	return r.client.DNS.Records.Delete(ctx, recordID, params)
+}
+
 type DNSRecordType string
 
 func (r DNSRecordType) String() string {
@@ -39,40 +96,40 @@ type Domain struct {
 
 // DNSManager handles Cloudflare DNS operations
 type DNSManager struct {
-	client *cloudflare.Client
+	client CloudflareClient
 }
 
 // NewDNSManager creates a new DNS manager instance
 func NewDNSManager(apiToken string) (*DNSManager, error) {
-	client := cloudflare.NewClient(option.WithAPIToken(apiToken))
-
+	client := NewRealCloudflareClient(apiToken)
 	return &DNSManager{
 		client: client,
 	}, nil
 }
 
+// NewDNSManagerWithClient creates a new DNS manager with a custom client (for testing)
+func NewDNSManagerWithClient(client CloudflareClient) *DNSManager {
+	return &DNSManager{
+		client: client,
+	}
+}
+
 // GetZoneIDByName retrieves the Zone ID for a given zone name
 func (m *DNSManager) GetZoneIDByName(ctx context.Context, zoneName string) (string, error) {
-	page, err := m.client.Zones.List(ctx, zones.ZoneListParams{Name: cloudflare.String(zoneName)})
+	zones, err := m.client.ListZones(ctx, zones.ZoneListParams{Name: cloudflare.String(zoneName)})
 	if err != nil {
 		return "", fmt.Errorf("failed to list zones: %w", err)
 	}
-	if page == nil || len(page.Result) == 0 {
+	if len(zones) == 0 {
 		return "", fmt.Errorf("zone %s not found", zoneName)
 	}
-	return page.Result[0].ID, nil
+	return zones[0].ID, nil
 }
 
 // GetDNSRecords retrieves all DNS records for a domain
 func (m *DNSManager) GetDNSRecords(ctx context.Context, zoneID string) ([]dns.RecordResponse, error) {
-	cur := m.client.DNS.Records.ListAutoPaging(ctx, dns.RecordListParams{ZoneID: cloudflare.String(zoneID)})
-	records := []dns.RecordResponse{}
-	for cur.Next() {
-		if rec := cur.Current(); rec.Type == dns.RecordResponseTypeA || rec.Type == dns.RecordResponseTypeAAAA {
-			records = append(records, rec)
-		}
-	}
-	if err := cur.Err(); err != nil {
+	records, err := m.client.ListDNSRecords(ctx, dns.RecordListParams{ZoneID: cloudflare.String(zoneID)})
+	if err != nil {
 		return nil, fmt.Errorf("failed to list DNS records: %w", err)
 	}
 	return records, nil
@@ -208,7 +265,7 @@ func (m *DNSManager) EnsureDNSRecords(ctx context.Context, zoneID string, record
 		batchReq.Puts = cloudflare.F(prepareBatchUpdate(recordsToUpdate, ipv4, ipv6))
 	}
 
-	_, err = m.client.DNS.Records.Batch(ctx, batchReq)
+	_, err = m.client.BatchDNSRecords(ctx, batchReq)
 	if err != nil {
 		return fmt.Errorf("failed to execute batch DNS record update: %w", err)
 	}
@@ -218,7 +275,7 @@ func (m *DNSManager) EnsureDNSRecords(ctx context.Context, zoneID string, record
 
 // DeleteDNSRecord deletes a DNS record by ID
 func (m *DNSManager) DeleteDNSRecord(ctx context.Context, zoneID, recordID string) error {
-	_, err := m.client.DNS.Records.Delete(ctx, recordID, dns.RecordDeleteParams{
+	_, err := m.client.DeleteDNSRecord(ctx, recordID, dns.RecordDeleteParams{
 		ZoneID: cloudflare.String(zoneID),
 	})
 	if err != nil {

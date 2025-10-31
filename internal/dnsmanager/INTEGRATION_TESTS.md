@@ -30,8 +30,10 @@ export CLOUDFLARE_TEST_ZONE_NAME="example.com"  # Your actual domain
 ### Getting Your Zone ID
 
 You can get your zone ID from:
+
 1. Cloudflare Dashboard → Select your domain → Overview → Zone ID (in the right sidebar)
 2. Or use the Cloudflare API:
+
    ```bash
    curl -X GET "https://api.cloudflare.com/client/v4/zones?name=example.com" \
      -H "Authorization: Bearer YOUR_API_TOKEN" \
@@ -56,15 +58,17 @@ You can get your zone ID from:
 
 ### Run all integration tests
 
-Integration tests are isolated using Go build tags. To run them:
+Integration tests are isolated using Go build tags and run **sequentially** to avoid race conditions when modifying DNS records. To run them:
 
 ```bash
-# Using the Makefile (recommended)
+# Using the Makefile (recommended - runs tests sequentially)
 make test-integration
 
-# Or directly with go test
-go test -v -tags=integration ./internal/dnsmanager/
+# Or directly with go test (sequential execution)
+go test -v -p 1 -parallel 1 -tags=integration ./internal/dnsmanager/
 ```
+
+**Note:** The `-p 1 -parallel 1` flags ensure tests run sequentially, preventing race conditions when creating/updating/deleting DNS records in the same Cloudflare zone.
 
 ### Run only unit tests (skip integration tests)
 
@@ -89,7 +93,7 @@ go test -short ./internal/dnsmanager/
 ### Run a specific integration test
 
 ```bash
-go test -v -tags=integration ./internal/dnsmanager/ -run TestIntegration_GetZoneIDByName
+go test -v -p 1 -parallel 1 -tags=integration ./internal/dnsmanager/ -run TestIntegration_GetZoneIDByName
 ```
 
 ## Build Tags
@@ -102,6 +106,7 @@ Integration tests use the `integration` build tag:
 ```
 
 This allows you to:
+
 - Run unit tests by default without integration tests
 - Explicitly include integration tests with `-tags=integration`
 - Keep integration tests separate in CI/CD pipelines
@@ -111,13 +116,16 @@ This allows you to:
 The integration tests cover the following scenarios:
 
 ### 1. GetZoneIDByName
+
 - **TestIntegration_GetZoneIDByName**: Verifies zone ID lookup by name
 - **TestIntegration_GetZoneIDByName_NotFound**: Tests error handling for nonexistent zones
 
 ### 2. GetDNSRecords
+
 - **TestIntegration_GetDNSRecords**: Retrieves all A and AAAA records from the zone
 
 ### 3. EnsureDNSRecords - Create and Update
+
 - **TestIntegration_EnsureDNSRecords_CreateAndUpdate**:
   - Creates new A and AAAA records
   - Verifies they were created correctly
@@ -126,30 +134,35 @@ The integration tests cover the following scenarios:
   - Cleans up test records
 
 ### 4. EnsureDNSRecords - No Updates Needed
+
 - **TestIntegration_EnsureDNSRecords_NoUpdatesNeeded**:
   - Creates a record
   - Calls EnsureDNSRecords again with the same IP (should skip update)
   - Verifies no errors occur
 
 ### 5. EnsureDNSRecords - Proxied Status
+
 - **TestIntegration_EnsureDNSRecords_ProxiedToggle**:
   - Creates a record with proxied=false
   - Updates to proxied=true
   - Verifies the proxied status was updated
 
 ### 6. EnsureDNSRecords - Empty IPs
+
 - **TestIntegration_EnsureDNSRecords_EmptyIPs**:
   - Tests that empty IPs are handled gracefully (records skipped)
 
 ## Test Isolation
 
 All integration tests:
+
 - Use unique subdomain names with timestamps to avoid conflicts
 - Clean up created records after test completion
 - Are safe to run in parallel (each test uses unique record names)
 - Will not affect existing DNS records in your zone
 
 Test records are created with names like:
+
 - `ipwatcher-test-20231027-143025.example.com`
 - `ipwatcher-test-noupdate-20231027-143030.example.com`
 - `ipwatcher-test-proxy-20231027-143035.example.com`
@@ -165,20 +178,24 @@ Test records are created with names like:
 ## Troubleshooting
 
 ### Tests are skipped
+
 - Ensure all three environment variables are set
 - Check that you're not running with `-short` flag
 
 ### API Token errors
+
 - Verify your API token has the correct permissions
 - Check that the token hasn't expired
 - Ensure the token has access to the specific zone
 
 ### Zone not found
+
 - Verify `CLOUDFLARE_TEST_ZONE_NAME` matches exactly (case-sensitive)
 - Check that the zone exists in your Cloudflare account
 - Ensure the API token has access to this zone
 
 ### Records not cleaned up
+
 - Check the test logs for cleanup errors
 - Manually delete test records from Cloudflare Dashboard if needed
 - Look for records starting with `ipwatcher-test-`

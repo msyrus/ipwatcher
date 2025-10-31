@@ -8,7 +8,7 @@
 
 ## 2. Get Your Cloudflare API Token
 
-1. Visit: https://dash.cloudflare.com/profile/api-tokens
+1. Visit: <https://dash.cloudflare.com/profile/api-tokens>
 2. Click **"Create Token"**
 3. Use the **"Edit zone DNS"** template
 4. Set permissions: Zone → DNS → Edit

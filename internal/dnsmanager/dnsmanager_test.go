@@ -2,13 +2,49 @@ package dnsmanager_test
 
 import (
 	"context"
-	"encoding/json"
-	"net/http"
-	"net/http/httptest"
+	"errors"
 	"testing"
 
+	"github.com/cloudflare/cloudflare-go/v6/dns"
+	"github.com/cloudflare/cloudflare-go/v6/zones"
 	"github.com/msyrus/ipwatcher/internal/dnsmanager"
 )
+
+// MockCloudflareClient is a mock implementation of CloudflareClient for testing
+type MockCloudflareClient struct {
+	ListZonesFunc       func(ctx context.Context, params zones.ZoneListParams) ([]zones.Zone, error)
+	ListDNSRecordsFunc  func(ctx context.Context, params dns.RecordListParams) ([]dns.RecordResponse, error)
+	BatchDNSRecordsFunc func(ctx context.Context, params dns.RecordBatchParams) (*dns.RecordBatchResponse, error)
+	DeleteDNSRecordFunc func(ctx context.Context, recordID string, params dns.RecordDeleteParams) (*dns.RecordDeleteResponse, error)
+}
+
+func (m *MockCloudflareClient) ListZones(ctx context.Context, params zones.ZoneListParams) ([]zones.Zone, error) {
+	if m.ListZonesFunc != nil {
+		return m.ListZonesFunc(ctx, params)
+	}
+	return nil, nil
+}
+
+func (m *MockCloudflareClient) ListDNSRecords(ctx context.Context, params dns.RecordListParams) ([]dns.RecordResponse, error) {
+	if m.ListDNSRecordsFunc != nil {
+		return m.ListDNSRecordsFunc(ctx, params)
+	}
+	return nil, nil
+}
+
+func (m *MockCloudflareClient) BatchDNSRecords(ctx context.Context, params dns.RecordBatchParams) (*dns.RecordBatchResponse, error) {
+	if m.BatchDNSRecordsFunc != nil {
+		return m.BatchDNSRecordsFunc(ctx, params)
+	}
+	return &dns.RecordBatchResponse{}, nil
+}
+
+func (m *MockCloudflareClient) DeleteDNSRecord(ctx context.Context, recordID string, params dns.RecordDeleteParams) (*dns.RecordDeleteResponse, error) {
+	if m.DeleteDNSRecordFunc != nil {
+		return m.DeleteDNSRecordFunc(ctx, recordID, params)
+	}
+	return &dns.RecordDeleteResponse{}, nil
+}
 
 func TestDNSRecordType_String(t *testing.T) {
 	tests := []struct {
@@ -79,65 +115,164 @@ func TestNewDNSManager(t *testing.T) {
 	}
 }
 
-func TestGetZoneIDByName_MockServer(t *testing.T) {
+func TestGetZoneIDByName_WithMock(t *testing.T) {
 	tests := []struct {
-		name           string
-		zoneName       string
-		mockResponse   interface{}
-		mockStatusCode int
-		wantError      bool
-		expectedZoneID string
+		name        string
+		zoneName    string
+		mockZones   []zones.Zone
+		mockError   error
+		expectedID  string
+		expectError bool
 	}{
 		{
-			name:     "successful zone lookup",
+			name:     "zone found",
 			zoneName: "example.com",
-			mockResponse: map[string]interface{}{
-				"success": true,
-				"result": []map[string]interface{}{
-					{
-						"id":   "zone-id-123",
-						"name": "example.com",
-					},
+			mockZones: []zones.Zone{
+				{
+					ID:   "zone-123",
+					Name: "example.com",
 				},
 			},
-			mockStatusCode: http.StatusOK,
-			wantError:      false,
-			expectedZoneID: "zone-id-123",
+			expectedID:  "zone-123",
+			expectError: false,
 		},
 		{
-			name:     "zone not found",
-			zoneName: "nonexistent.com",
-			mockResponse: map[string]interface{}{
-				"success": true,
-				"result":  []map[string]interface{}{},
+			name:        "zone not found",
+			zoneName:    "notfound.com",
+			mockZones:   []zones.Zone{},
+			expectedID:  "",
+			expectError: true,
+		},
+		{
+			name:        "API error",
+			zoneName:    "example.com",
+			mockZones:   nil,
+			mockError:   errors.New("API error"),
+			expectedID:  "",
+			expectError: true,
+		},
+		{
+			name:     "multiple zones - returns first match",
+			zoneName: "example.com",
+			mockZones: []zones.Zone{
+				{
+					ID:   "zone-first",
+					Name: "example.com",
+				},
+				{
+					ID:   "zone-second",
+					Name: "example.com",
+				},
 			},
-			mockStatusCode: http.StatusOK,
-			wantError:      true,
-		},
-		{
-			name:           "API error",
-			zoneName:       "error.com",
-			mockResponse:   map[string]interface{}{"success": false},
-			mockStatusCode: http.StatusInternalServerError,
-			wantError:      true,
+			expectedID:  "zone-first",
+			expectError: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create mock HTTP server
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(tt.mockStatusCode)
-				json.NewEncoder(w).Encode(tt.mockResponse)
-			}))
-			defer server.Close()
+			mockClient := &MockCloudflareClient{
+				ListZonesFunc: func(ctx context.Context, params zones.ZoneListParams) ([]zones.Zone, error) {
+					if tt.mockError != nil {
+						return nil, tt.mockError
+					}
+					return tt.mockZones, nil
+				},
+			}
 
-			// Note: This test demonstrates the structure, but actual mocking
-			// of the Cloudflare client would require dependency injection
-			// For now, we test that the function can be called
-			t.Logf("Mock server URL: %s", server.URL)
-			t.Skip("Skipping mock test - requires dependency injection refactoring")
+			manager := dnsmanager.NewDNSManagerWithClient(mockClient)
+			ctx := context.Background()
+
+			zoneID, err := manager.GetZoneIDByName(ctx, tt.zoneName)
+
+			if tt.expectError {
+				if err == nil {
+					t.Error("Expected error but got nil")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected error: %v", err)
+				}
+				if zoneID != tt.expectedID {
+					t.Errorf("Expected zone ID %q, got %q", tt.expectedID, zoneID)
+				}
+			}
+		})
+	}
+}
+
+func TestGetDNSRecords_WithMock(t *testing.T) {
+	tests := []struct {
+		name          string
+		zoneID        string
+		mockRecords   []dns.RecordResponse
+		mockError     error
+		expectedCount int
+		expectError   bool
+	}{
+		{
+			name:   "records found",
+			zoneID: "zone-123",
+			mockRecords: []dns.RecordResponse{
+				{
+					ID:   "record-1",
+					Name: "www.example.com",
+					Type: "A",
+				},
+				{
+					ID:   "record-2",
+					Name: "api.example.com",
+					Type: "AAAA",
+				},
+			},
+			expectedCount: 2,
+			expectError:   false,
+		},
+		{
+			name:          "no records found",
+			zoneID:        "zone-123",
+			mockRecords:   []dns.RecordResponse{},
+			expectedCount: 0,
+			expectError:   false,
+		},
+		{
+			name:          "API error",
+			zoneID:        "zone-123",
+			mockRecords:   nil,
+			mockError:     errors.New("API error"),
+			expectedCount: 0,
+			expectError:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockClient := &MockCloudflareClient{
+				ListDNSRecordsFunc: func(ctx context.Context, params dns.RecordListParams) ([]dns.RecordResponse, error) {
+					if tt.mockError != nil {
+						return nil, tt.mockError
+					}
+					return tt.mockRecords, nil
+				},
+			}
+
+			manager := dnsmanager.NewDNSManagerWithClient(mockClient)
+			ctx := context.Background()
+
+			records, err := manager.GetDNSRecords(ctx, tt.zoneID)
+
+			if tt.expectError {
+				if err == nil {
+					t.Error("Expected error but got nil")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected error: %v", err)
+				}
+				if len(records) != tt.expectedCount {
+					t.Errorf("Expected %d records, got %d", tt.expectedCount, len(records))
+				}
+			}
 		})
 	}
 }

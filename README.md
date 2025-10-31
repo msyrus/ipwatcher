@@ -314,7 +314,7 @@ make bench
 
 #### Integration Tests
 
-Integration tests for the DNS manager package test against actual Cloudflare API. These tests use Go build tags and are excluded from normal test runs.
+Integration tests for the DNS manager package test against actual Cloudflare API. These tests use Go build tags and are excluded from normal test runs. **Tests run sequentially to avoid race conditions** when modifying DNS records.
 
 **Note**: Integration tests require Cloudflare credentials and use the `integration` build tag.
 
@@ -326,11 +326,11 @@ export CLOUDFLARE_API_TOKEN="your-api-token"
 export CLOUDFLARE_TEST_ZONE_ID="your-zone-id"
 export CLOUDFLARE_TEST_ZONE_NAME="example.com"
 
-# Run integration tests (using Makefile - recommended)
+# Run integration tests sequentially (using Makefile - recommended)
 make test-integration
 
-# Or run directly with build tags
-go test -v -tags=integration ./internal/dnsmanager/
+# Or run directly with build tags (sequential execution)
+go test -v -p 1 -parallel 1 -tags=integration ./internal/dnsmanager/
 ```
 
 For detailed information about integration tests, see [internal/dnsmanager/INTEGRATION_TESTS.md](internal/dnsmanager/INTEGRATION_TESTS.md).

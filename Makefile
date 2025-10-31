@@ -33,14 +33,12 @@ test-unit:
 	@go test -v ./...
 
 # Run all tests (unit + integration)
-test:
-	@echo "Running all tests (unit + integration)..."
-	@go test -v -tags=integration ./...
+test: test-unit test-integration
 
 # Run tests with coverage (includes integration tests)
 test-coverage:
 	@echo "Running tests with coverage (including integration tests)..."
-	@go test -v -race -tags=integration -coverprofile=coverage.out -covermode=atomic ./...
+	@go test -v -p 1 -parallel 1 -race -tags=integration -coverprofile=coverage.out -covermode=atomic ./...
 	@go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated: coverage.html"
 
@@ -63,7 +61,7 @@ bench:
 
 # Run integration tests only (requires Cloudflare credentials)
 test-integration:
-	@echo "Running integration tests only..."
+	@echo "Running integration tests sequentially..."
 	@if [ -z "$$CLOUDFLARE_API_TOKEN" ]; then \
 		echo "Error: CLOUDFLARE_API_TOKEN not set"; \
 		echo "Please set the following environment variables:"; \
@@ -73,7 +71,7 @@ test-integration:
 		echo "See internal/dnsmanager/INTEGRATION_TESTS.md for details"; \
 		exit 1; \
 	fi
-	@go test -v -tags=integration ./internal/dnsmanager/
+	@go test -v -p 1 -parallel 1 -tags=integration ./internal/dnsmanager/
 
 # Format code
 fmt:
