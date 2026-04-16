@@ -1,5 +1,6 @@
 [Unit]
-Description=IP Watcher - Dynamic DNS updater for Cloudflare
+Description=ipwatcher dynamic DNS updater for Cloudflare and AWS Route 53
+Documentation=https://github.com/msyrus/ipwatcher
 After=network-online.target
 Wants=network-online.target
 
@@ -11,9 +12,10 @@ WorkingDirectory=/opt/ipwatcher
 ExecStart=/opt/ipwatcher/ipwatcher
 Restart=on-failure
 RestartSec=10
+UMask=0077
 
 # Environment
-EnvironmentFile=/opt/ipwatcher/.env
+EnvironmentFile=-/opt/ipwatcher/.env
 Environment="CONFIG_FILE=/opt/ipwatcher/config.yaml"
 
 # Security hardening
@@ -21,7 +23,13 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/opt/ipwatcher/logs
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
 
 # Logging
 StandardOutput=journal

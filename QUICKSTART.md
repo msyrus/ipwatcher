@@ -1,149 +1,155 @@
 # Quick Start Guide
 
-## 1. Prerequisites
+This guide gets `ipwatcher` running quickly with either Cloudflare, AWS Route 53, or both.
 
-- Go 1.21+ installed
-- A Cloudflare account
-- Your domain(s) managed by Cloudflare
+## 1. Choose your provider setup
 
-## 2. Get Your Cloudflare API Token
+### Cloudflare
 
-1. Visit: <https://dash.cloudflare.com/profile/api-tokens>
-2. Click **"Create Token"**
-3. Use the **"Edit zone DNS"** template
-4. Set permissions: Zone → DNS → Edit
-5. Include your specific zone(s) or all zones
-6. Create token and copy it (you'll only see it once!)
+You need:
 
-## 3. Quick Setup
+- a domain managed in Cloudflare
+- an API token with `Zone -> DNS -> Edit`
 
-### Option A: Docker (Recommended)
+Create the token at <https://dash.cloudflare.com/profile/api-tokens> using the **Edit zone DNS** template.
+
+### AWS Route 53
+
+You need:
+
+- a hosted zone in Route 53
+- AWS credentials with permission to list zones and update record sets
+- a region value for the AWS SDK, typically `us-east-1`
+
+## 2. Clone the repository
 
 ```bash
-# Clone the repository
 git clone https://github.com/msyrus/ipwatcher.git
 cd ipwatcher
+```
 
-# Create environment file
-echo "CLOUDFLARE_API_TOKEN=your_actual_token_here" > .env
+## 3. Create config and environment files
 
-# Copy and edit config
+```bash
 cp config.yaml.example config.yaml
-nano config.yaml  # Update zone_name and records
-
-# Start with Docker Compose
-docker-compose up -d
-
-# View logs
-docker-compose logs -f
+cp .env.example .env
 ```
 
-### Option B: Build from Source
+Edit `config.yaml` and `.env`.
 
-```bash
-# Clone the repository
-git clone https://github.com/msyrus/ipwatcher.git
-cd ipwatcher
-
-# Download dependencies
-go mod download
-
-# Create environment file
-echo "CLOUDFLARE_API_TOKEN=your_actual_token_here" > .env
-
-# Copy and edit config
-cp config.yaml.example config.yaml
-nano config.yaml  # Update zone_name and records
-```
-
-## 4. Test Run
-
-```bash
-# Build and run
-go build -o ipwatcher ./cmd/ipwatcher
-./ipwatcher
-```
-
-You should see output like:
-
-```text
-2024/10/30 18:00:00 Starting IP Watcher daemon...
-2024/10/30 18:00:00 Current IPv4: 203.0.113.45
-2024/10/30 18:00:00 Current IPv6: 2001:db8::1
-2024/10/30 18:00:00 Updated DNS record example.com (A) to IP 203.0.113.45
-```
-
-Press `Ctrl+C` to stop.
-
-## 5. Install as Service (Linux)
-
-```bash
-# Run installation script
-chmod +x install.sh
-sudo ./install.sh
-
-# Edit the installed config
-sudo nano /opt/ipwatcher/config.yaml
-sudo nano /opt/ipwatcher/.env
-
-# Start the service
-sudo systemctl enable ipwatcher
-sudo systemctl start ipwatcher
-
-# Check status
-sudo systemctl status ipwatcher
-
-# View logs
-sudo journalctl -u ipwatcher -f
-```
-
-## Example Configuration
+### Example `config.yaml`
 
 ```yaml
-refresh_rate: 0.1    # Check IP every 10 seconds
-sync_rate: 1         # Verify DNS every minute
-supports_ipv6: false # Set to true if your network supports IPv6
+refresh_rate: 0.1
+sync_rate: 1
+supports_ipv6: false
 
 domains:
   - zone_name: "example.com"
+    provider: "cloudflare"
     records:
-      # Root domain
       - name: "@"
         type: A
         proxied: false
-
-      # WWW subdomain (proxied through Cloudflare)
       - name: "www"
         type: A
         proxied: true
 
-      # API subdomain (direct to origin)
-      - name: "api"
+  - zone_name: "example.net"
+    provider: "route53"
+    records:
+      - name: "home"
         type: A
-        proxied: false
 ```
 
-## Troubleshooting
+### Example `.env`
 
-### "CLOUDFLARE_API_TOKEN environment variable is required"
+```bash
+# Cloudflare
+CLOUDFLARE_API_TOKEN=your_cloudflare_token
 
-- Make sure you have a `.env` file with your token
-- Or export it: `export CLOUDFLARE_API_TOKEN="your_token"`
+# Route 53
+AWS_ACCESS_KEY_ID=your_aws_access_key_id
+AWS_SECRET_ACCESS_KEY=your_aws_secret_access_key
+AWS_REGION=us-east-1
+```
 
-### "Failed to load configuration"
+Only keep the variables you actually need.
 
-- Check that `config.yaml` exists
-- Validate YAML syntax using a [YAML linter](https://www.yamllint.com/)
+## 4. Start it
 
-### DNS records not updating
+### Option A: Docker Compose
 
-- Verify your API token has DNS edit permissions
-- Check zone_name matches your domain exactly
-- Ensure record names use correct format ("@" for root, "www" for subdomain)
+```bash
+mkdir -p logs
+docker compose up -d
+docker compose logs -f
+```
 
-## Next Steps
+### Option B: Run locally
 
-- See [README.md](README.md) for full documentation
-- Adjust refresh_rate and sync_rate based on your needs
-- Add more domains and subdomains to your config
-- Set up monitoring for the systemd service
+```bash
+go mod download
+go build -o ipwatcher ./cmd/ipwatcher
+set -a
+source .env
+set +a
+export CONFIG_FILE=config.yaml
+./ipwatcher
+```
+
+Expected startup logs look roughly like this:
+
+```text
+2026/04/16 18:00:00 Starting IP Watcher daemon...
+2026/04/16 18:00:00 Current IPv4: 203.0.113.45
+2026/04/16 18:00:00 DNS records for example.com (cloudflare) updated successfully
+2026/04/16 18:00:00 DNS records for example.net (route53) updated successfully
+```
+
+Press `Ctrl+C` to stop the local process.
+
+## 5. Install as a Linux service
+
+```bash
+sudo ./install.sh
+sudo systemctl enable --now ipwatcher
+sudo systemctl status ipwatcher
+sudo journalctl -u ipwatcher -f
+```
+
+Installed files live in `/opt/ipwatcher`:
+
+- `/opt/ipwatcher/ipwatcher`
+- `/opt/ipwatcher/config.yaml`
+- `/opt/ipwatcher/config.yaml.example`
+- `/opt/ipwatcher/.env`
+- `/opt/ipwatcher/.env.example`
+
+## Common gotchas
+
+### `CLOUDFLARE_API_TOKEN environment variable is required`
+
+You have at least one `cloudflare` domain configured, but the token is missing from `.env` or your shell environment.
+
+### `failed to create Route53 provider`
+
+The AWS SDK could not load credentials or region settings. Confirm your `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_REGION` values.
+
+### `AAAA record configured but supports_ipv6 is false`
+
+Set `supports_ipv6: true` or remove the `AAAA` records.
+
+### Records are not updating
+
+Check that:
+
+- `zone_name` exactly matches the authoritative zone / hosted zone name
+- `name` is `@` or a relative label like `www` or `vpn`
+- provider credentials have permission to edit DNS
+
+## What next?
+
+- Read [README.md](README.md) for full configuration details
+- Use `systemd-override.example` if you want custom service overrides
+- Add more zones as needed; mixed Cloudflare + Route 53 configs are supported

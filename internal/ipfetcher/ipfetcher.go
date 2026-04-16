@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -22,10 +23,18 @@ type IPFetcher struct {
 
 // NewIPFetcher creates a new IP fetcher instance
 func NewIPFetcher() *IPFetcher {
+	return NewIPFetcherWithClient(nil)
+}
+
+// NewIPFetcherWithClient creates a new IP fetcher with a custom HTTP client.
+// If client is nil, a default client with timeout is used.
+func NewIPFetcherWithClient(client *http.Client) *IPFetcher {
+	if client == nil {
+		client = &http.Client{Timeout: timeout}
+	}
+
 	return &IPFetcher{
-		client: &http.Client{
-			Timeout: timeout,
-		},
+		client: client,
 	}
 }
 
@@ -64,6 +73,9 @@ func (f *IPFetcher) fetchIP(ctx context.Context, url string) (string, error) {
 	ip := strings.TrimSpace(string(body))
 	if ip == "" {
 		return "", fmt.Errorf("empty IP address received")
+	}
+	if net.ParseIP(ip) == nil {
+		return "", fmt.Errorf("invalid IP address received: %q", ip)
 	}
 
 	return ip, nil

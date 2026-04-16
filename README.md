@@ -7,72 +7,71 @@
 [![License](https://img.shields.io/github/license/msyrus/ipwatcher)](https://github.com/msyrus/ipwatcher/blob/main/LICENSE)
 [![Docker Pulls](https://img.shields.io/docker/pulls/msyrus/ipwatcher)](https://hub.docker.com/r/msyrus/ipwatcher)
 
-A daemon service that monitors your server's public IP address and automatically updates A and AAAA DNS records in Cloudflare for your configured domains and subdomains.
+`ipwatcher` monitors your public IP address and keeps DNS `A` and `AAAA` records in sync across Cloudflare and AWS Route 53.
+
+It is designed for home labs, self-hosted services, VPN endpoints, and tiny-but-stubborn servers whose public IP likes to wander off unsupervised.
 
 ## Features
 
-- **Automatic IP Detection**: Fetches both IPv4 and IPv6 addresses from ipify API
-- **Cloudflare DNS Management**: Automatically updates A (IPv4) and AAAA (IPv6) records
-- **Configurable Rates**:
-  - **Refresh Rate**: How many times per second to check for IP changes
-  - **Sync Rate**: How many times per minute to verify DNS records are up-to-date
-- **Multi-Domain Support**: Manage multiple domains and subdomains from a single configuration
-- **Systemd Integration**: Run as a proper system daemon with automatic restart
-- **Docker Support**: Run in containers with Docker or Docker Compose
-- **Graceful Shutdown**: Handles SIGTERM/SIGINT signals properly
+- Automatic public IPv4 detection, with optional IPv6 support
+- Per-zone provider selection: `cloudflare` or `route53`
+- Mixed-provider configs in a single deployment
+- Immediate DNS updates on IP change plus scheduled reconciliation
+- Cloudflare proxy support for `A` and `AAAA` records
+- Route 53 hosted zone discovery by zone name
+- Linux systemd service and Docker/Docker Compose support
+- Graceful shutdown on `SIGINT` and `SIGTERM`
+
+## Supported providers
+
+### Cloudflare
+
+- Uses `CLOUDFLARE_API_TOKEN`
+- Supports proxied and non-proxied `A` / `AAAA` records
+- Automatically looks up the zone ID from `zone_name`
+
+### AWS Route 53
+
+- Uses the standard AWS SDK credential chain
+- Common setup is `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_REGION`
+- Automatically looks up the hosted zone ID from `zone_name`
+- Ignores the `proxied` setting because Route 53 does not have a Cloudflare-style proxy mode
 
 ## Prerequisites
 
-- Go 1.21 or later (for building from source)
-- OR Docker (for containerized deployment)
-- A Cloudflare account with API token
-- Linux system with systemd (for daemon mode, optional)
+- Go 1.21+ if building from source
+- or Docker / Docker Compose for container deployment
+- Cloudflare API access if you use Cloudflare-managed zones
+- AWS credentials with Route 53 permissions if you use Route 53-managed zones
+- Linux with systemd if you want to run it as a service
 
-## Installation
+## Quick start
 
-### 1. Clone the repository
+### 1. Clone and build
 
 ```bash
 git clone https://github.com/msyrus/ipwatcher.git
 cd ipwatcher
-```
-
-### 2. Install dependencies
-
-```bash
 go mod download
-```
-
-### 3. Build the binary
-
-```bash
 go build -o ipwatcher ./cmd/ipwatcher
 ```
 
-### 4. Configure the service
-
-#### Create configuration file
-
-Copy the example configuration:
+### 2. Create your config
 
 ```bash
 cp config.yaml.example config.yaml
 ```
 
-Edit `config.yaml` with your settings:
+Minimal mixed-provider example:
 
 ```yaml
-# How many times per second to check for IP changes (0.1 = once every 10 seconds)
 refresh_rate: 0.1
-
-# How many times per minute to verify DNS records (1 = once per minute)
 sync_rate: 1
-
-# Whether your network supports IPv6 (required if using AAAA records)
-supports_ipv6: false
+supports_ipv6: true
 
 domains:
   - zone_name: "example.com"
+    provider: "cloudflare"
     records:
       - name: "@"
         type: A
@@ -80,314 +79,254 @@ domains:
       - name: "www"
         type: A
         proxied: true
+      - name: "www"
+        type: AAAA
+        proxied: true
+
+  - zone_name: "example.net"
+    provider: "route53"
+    records:
+      - name: "home"
+        type: A
+      - name: "vpn"
+        type: AAAA
 ```
 
-#### Set up environment variables
-
-Create a `.env` file:
+### 3. Add credentials
 
 ```bash
-echo "CLOUDFLARE_API_TOKEN=your_api_token_here" > .env
+cp .env.example .env
 ```
 
-**Creating a Cloudflare API Token:**
+Then edit `.env` and keep only the credentials relevant to the providers you use.
 
-1. Go to [https://dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens)
-2. Click "Create Token"
-3. Use the "Edit zone DNS" template or create a custom token with:
-   - Permissions: `Zone` → `DNS` → `Edit`
-   - Zone Resources: `Include` → `Specific zone` → Select your domain(s)
-4. Copy the token and add it to `.env`
-
-### 5. Install as systemd service (Optional)
-
-Run the installation script:
+Example:
 
 ```bash
-chmod +x install.sh
-sudo ./install.sh
+CLOUDFLARE_API_TOKEN=your_cloudflare_token
+AWS_ACCESS_KEY_ID=your_aws_access_key_id
+AWS_SECRET_ACCESS_KEY=your_aws_secret_access_key
+AWS_REGION=us-east-1
 ```
 
-This will:
-
-- Create an `ipwatcher` system user
-- Install the binary to `/opt/ipwatcher`
-- Copy configuration files
-- Install and configure the systemd service
-
-### 6. Docker Deployment (Alternative)
-
-See [DOCKER.md](DOCKER.md) for complete Docker deployment guide.
-
-Quick start with Docker Compose:
+### 4. Run it manually
 
 ```bash
-# Create config and .env files
-cp config.yaml.example config.yaml
-echo "CLOUDFLARE_API_TOKEN=your_token" > .env
-
-# Start with Docker Compose
-docker-compose up -d
-
-# View logs
-docker-compose logs -f
-```
-
-## Usage
-
-### Running with Docker Compose
-
-```bash
-# Start the service
-docker-compose up -d
-
-# View logs
-docker-compose logs -f
-
-# Stop the service
-docker-compose down
-```
-
-### Running manually
-
-```bash
-# Set environment variables
-export CLOUDFLARE_API_TOKEN="your_token"
-export CONFIG_FILE="config.yaml"
-
-# Run the daemon
+export CONFIG_FILE=config.yaml
+set -a
+source .env
+set +a
 ./ipwatcher
 ```
 
-### Running as systemd service
+### 5. Or install it as a service
 
 ```bash
-# Enable service to start on boot
-sudo systemctl enable ipwatcher
-
-# Start the service
-sudo systemctl start ipwatcher
-
-# Check status
-sudo systemctl status ipwatcher
-
-# View logs
+sudo ./install.sh
+sudo systemctl enable --now ipwatcher
 sudo journalctl -u ipwatcher -f
-
-# Stop the service
-sudo systemctl stop ipwatcher
-
-# Restart the service
-sudo systemctl restart ipwatcher
 ```
 
-## Configuration Reference
+For a shorter guided setup, see [QUICKSTART.md](QUICKSTART.md).
 
-### Global Settings
+## Docker and Docker Compose
+
+```bash
+cp config.yaml.example config.yaml
+cp .env.example .env
+mkdir -p logs
+docker compose up -d
+docker compose logs -f
+```
+
+If you are using Route 53 in Docker, fill in the AWS variables in `.env` before starting the container.
+
+## Configuration reference
+
+### Global settings
 
 | Field | Type | Description | Example |
-|-------|------|-------------|---------|
-| `refresh_rate` | float | Times per second to check IP changes | `0.1` (every 10s) |
-| `sync_rate` | float | Times per minute to verify DNS records | `1` (every minute) |
-| `supports_ipv6` | bool | Whether your network supports IPv6 | `false` |
+| ----- | ---- | ----------- | ------- |
+| `refresh_rate` | float | How many times per second to check the public IP | `0.1` |
+| `sync_rate` | float | How many times per minute to reconcile DNS records | `1` |
+| `supports_ipv6` | bool | Enable IPv6 fetching and allow `AAAA` records | `false` |
 
-**Note**: Set `supports_ipv6` to `true` only if your server has IPv6 connectivity. This is required if you want to use AAAA records.
+`supports_ipv6` must be `true` if any configured record uses type `AAAA`.
 
-### Domain Configuration
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `zone_name` | string | Yes | Domain name (e.g., "example.com") |
-| `records` | array | Yes | List of DNS records to manage |
-
-**Note**: The zone ID is automatically looked up from the zone name using the Cloudflare API.
-
-### Record Configuration
+### Domain settings
 
 | Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | string | Yes | Full domain name (e.g., "example.com" or "www.example.com") |
-| `type` | string | Yes | Record type: `A` (IPv4) or `AAAA` (IPv6) |
-| `proxied` | bool | Yes | Whether to proxy through Cloudflare CDN |
+| ----- | ---- | -------- | ----------- |
+| `zone_name` | string | Yes | DNS zone / hosted zone name, such as `example.com` |
+| `provider` | string | No | `cloudflare` or `route53`; defaults to `cloudflare` |
+| `records` | array | Yes | Records to manage inside the zone |
 
-### IPv6 Configuration Example
+### Record settings
 
-If your server has IPv6 connectivity, you can manage both A and AAAA records:
+| Field | Type | Required | Description |
+| ----- | ---- | -------- | ----------- |
+| `name` | string | Yes | Relative record name: use `@` for the zone apex, or labels like `www`, `vpn`, `home` |
+| `type` | string | Yes | `A` or `AAAA` |
+| `proxied` | bool | No | Cloudflare-only proxy flag; ignored by Route 53 |
 
-```yaml
-refresh_rate: 0.1
-sync_rate: 1
-supports_ipv6: true  # Enable IPv6 support
+For `zone_name: "example.com"`:
 
-domains:
-  - zone_name: "example.com"
-    records:
-      # IPv4 record
-      - name: "example.com"
-        type: A
-        proxied: false
+- `name: "@"` manages `example.com`
+- `name: "www"` manages `www.example.com`
+- `name: "vpn"` manages `vpn.example.com`
 
-      # IPv6 record
-      - name: "example.com"
-        type: AAAA
-        proxied: false
-
-      # Both IPv4 and IPv6 for www
-      - name: "www.example.com"
-        type: A
-        proxied: true
-      - name: "www.example.com"
-        type: AAAA
-        proxied: true
-```
-
-**Important**: AAAA records require `supports_ipv6: true` in the configuration. The daemon will automatically detect your server's IPv6 address and update AAAA records accordingly.
-
-## Environment Variables
+## Environment variables
 
 | Variable | Required | Description |
-|----------|----------|-------------|
-| `CLOUDFLARE_API_TOKEN` | Yes | Cloudflare API token with DNS edit permissions |
-| `CONFIG_FILE` | No | Path to configuration file (default: `config.yaml`) |
+| -------- | -------- | ----------- |
+| `CLOUDFLARE_API_TOKEN` | If using Cloudflare | Cloudflare API token with DNS edit permissions |
+| `AWS_ACCESS_KEY_ID` | Usually, if using Route 53 | AWS access key for Route 53 |
+| `AWS_SECRET_ACCESS_KEY` | Usually, if using Route 53 | AWS secret access key |
+| `AWS_SESSION_TOKEN` | Optional | AWS session token for temporary credentials |
+| `AWS_REGION` | Recommended for Route 53 | Region passed to the AWS SDK, commonly `us-east-1` |
+| `CONFIG_FILE` | No | Config file path; defaults to `config.yaml` |
 
-## How It Works
+Route 53 authentication uses the AWS SDK default credential chain, so environment variables are the easiest option, not the only option.
 
-1. **IP Monitoring**: The daemon periodically queries the ipify API to get the current public IPv4 and IPv6 addresses
-2. **Change Detection**: When an IP change is detected, it immediately updates all configured DNS records
-3. **Periodic Verification**: At the configured sync rate, the daemon verifies all DNS records are correct and updates them if needed
-4. **Graceful Updates**: Only updates records that have actually changed to minimize API calls
+## Provider-specific notes
 
-## Logging
+### Cloudflare token permissions
 
-The daemon logs all operations including:
+Create a token with at least:
 
-- IP address changes
-- DNS record updates
-- Verification checks
-- Errors and warnings
+- `Zone` → `DNS` → `Edit`
+- Zone scope for the domains you want to manage
 
-When running as a systemd service, logs are sent to journald and can be viewed with:
+### Route 53 IAM permissions
+
+The Route 53 provider needs permission to:
+
+- list hosted zones by name
+- list resource record sets
+- change resource record sets
+
+Typical actions are:
+
+- `route53:ListHostedZonesByName`
+- `route53:ListResourceRecordSets`
+- `route53:ChangeResourceRecordSets`
+
+## How it works
+
+1. Fetch the current public IPv4 address and, when enabled, the public IPv6 address
+2. Cache the last known values in memory
+3. Update managed DNS records whenever an IP changes
+4. Periodically verify all configured records and reconcile drift
+
+Only records that need to change are updated, which keeps API traffic tidy.
+
+## Running as a systemd service
+
+After installation:
 
 ```bash
+sudo systemctl enable ipwatcher
+sudo systemctl start ipwatcher
+sudo systemctl status ipwatcher
 sudo journalctl -u ipwatcher -f
 ```
+
+The service reads environment variables from `/opt/ipwatcher/.env` and the configuration from `/opt/ipwatcher/config.yaml`.
 
 ## Troubleshooting
 
-### Service won't start
+### Service fails to start
 
-Check the logs:
+Check recent logs:
 
 ```bash
 sudo journalctl -u ipwatcher -n 50
 ```
 
-Common issues:
+Common causes:
 
-- Missing or invalid Cloudflare API token
-- Invalid configuration file
-- Incorrect zone name or permissions
+- missing Cloudflare or AWS credentials for the configured provider
+- invalid YAML in `config.yaml`
+- `AAAA` records configured while `supports_ipv6` is `false`
+- `zone_name` does not match the Cloudflare zone or Route 53 hosted zone name
 
-### DNS records not updating
+### Records are not updating
 
-1. Verify your API token has the correct permissions
-2. Check that the zone name in config matches your actual domain
-3. Ensure the record names are in the correct format (use "@" for root domain, or just the subdomain like "www")
+Check these first:
 
-### IPv6 not working
+1. `zone_name` exactly matches the authoritative zone
+2. `name` uses `@` or a relative label, not a full FQDN
+3. the provider credentials have permission to read and update DNS
+4. the host can reach the public internet to resolve its current IP
 
-IPv6 might not be available on your network. The daemon will log warnings but continue operating with IPv4 only.
+### IPv6 warnings
+
+If IPv6 is enabled but not available on the host or network, the daemon logs the fetch failure and continues operating for IPv4 records.
 
 ## Development
 
-### Project Structure
+### Project structure
 
 ```text
 ipwatcher/
 ├── cmd/
-│   └── ipwatcher/          # Main application entry point
+│   └── ipwatcher/
 │       └── main.go
 ├── internal/
-│   ├── config/             # Configuration management
-│   │   └── config.go
-│   ├── dnsmanager/         # Cloudflare DNS operations
-│   │   └── dnsmanager.go
-│   └── ipfetcher/          # IP address fetching
+│   ├── config/
+│   │   ├── config.go
+│   │   └── config_test.go
+│   ├── dnsmanager/
+│   │   ├── cloudflare.go
+│   │   ├── provider.go
+│   │   ├── route53.go
+│   │   └── types.go
+│   └── ipfetcher/
 │       └── ipfetcher.go
-├── config.yaml.example     # Example configuration
-├── ipwatcher.service       # Systemd service file
-├── install.sh              # Installation script
-├── go.mod                  # Go module definition
+├── config.yaml.example
+├── .env.example
+├── install.sh
+├── ipwatcher.service
 └── README.md
 ```
 
-### Building
+### Build
 
 ```bash
 go build -o ipwatcher ./cmd/ipwatcher
 ```
 
-### Testing
-
-Run tests:
+### Tests
 
 ```bash
-# All tests (unit + integration, requires credentials for integration)
-make test
-
-# Unit tests only (integration tests excluded)
 make test-unit
-
-# With coverage (includes integration tests if credentials available)
-make test-coverage
-
-# Unit tests coverage only
-make test-coverage-unit
-
-# Short tests only
 make test-short
-
-# Benchmarks
-make bench
+make test-coverage-unit
 ```
 
-#### Integration Tests
+### Integration tests
 
-Integration tests for the DNS manager package test against actual Cloudflare API. These tests use Go build tags and are excluded from normal test runs. **Tests run sequentially to avoid race conditions** when modifying DNS records.
-
-**Note**: Integration tests require Cloudflare credentials and use the `integration` build tag.
-
-To run integration tests:
+Cloudflare integration tests live under `internal/dnsmanager` and require explicit credentials.
 
 ```bash
-# Set required environment variables
 export CLOUDFLARE_API_TOKEN="your-api-token"
 export CLOUDFLARE_TEST_ZONE_ID="your-zone-id"
 export CLOUDFLARE_TEST_ZONE_NAME="example.com"
-
-# Run integration tests sequentially (using Makefile - recommended)
 make test-integration
-
-# Or run directly with build tags (sequential execution)
-go test -v -p 1 -parallel 1 -tags=integration ./internal/dnsmanager/
 ```
 
-For detailed information about integration tests, see [internal/dnsmanager/INTEGRATION_TESTS.md](internal/dnsmanager/INTEGRATION_TESTS.md).
+See [internal/dnsmanager/INTEGRATION_TESTS.md](internal/dnsmanager/INTEGRATION_TESTS.md) for details.
 
 ## License
 
-See [LICENSE](LICENSE) file for details.
+See [LICENSE](LICENSE).
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## Author
-
-msyrus
+Pull requests are welcome.
 
 ## Acknowledgments
 
-- [ipify](https://www.ipify.org/) for the IP detection API
-- [Cloudflare](https://www.cloudflare.com/) for DNS management
-- [cloudflare-go](https://github.com/cloudflare/cloudflare-go) for the Go API client
+- [ipify](https://www.ipify.org/) for public IP discovery
+- [Cloudflare](https://www.cloudflare.com/)
+- [AWS Route 53](https://aws.amazon.com/route53/)

@@ -28,11 +28,20 @@ services:
     # Add timezone
     environment:
       - TZ=America/New_York
+      # Uncomment if you use Route 53 and want to override credentials here
+      # - AWS_ACCESS_KEY_ID=replace_me
+      # - AWS_SECRET_ACCESS_KEY=replace_me
+      # - AWS_SESSION_TOKEN=replace_me
+      # - AWS_REGION=us-east-1
 
     # Use different config file location
     # volumes:
     #   - /path/to/your/config.yaml:/config/config.yaml:ro
     #   - /path/to/your/logs:/logs
+
+    # Example: mount shared AWS credentials instead of putting them in .env
+    # volumes:
+    #   - /path/to/your/.aws:/home/nonroot/.aws:ro
 
     # Change logging configuration
     # logging:

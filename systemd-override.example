@@ -24,10 +24,20 @@
 # [Service]
 # WorkingDirectory=/home/myuser/ipwatcher
 
-# Example: Add environment variables
+# Example: Override config location
 # [Service]
 # Environment="CONFIG_FILE=/etc/ipwatcher/config.yaml"
-# Environment="LOG_LEVEL=debug"
+
+# Example: Use a different environment file
+# [Service]
+# EnvironmentFile=-/etc/ipwatcher/ipwatcher.env
+
+# Example: Add provider-specific environment variables directly
+# [Service]
+# Environment="CLOUDFLARE_API_TOKEN=replace_me"
+# Environment="AWS_ACCESS_KEY_ID=replace_me"
+# Environment="AWS_SECRET_ACCESS_KEY=replace_me"
+# Environment="AWS_REGION=us-east-1"
 
 # Example: Increase restart delay
 # [Service]
@@ -42,7 +52,3 @@
 # [Unit]
 # After=network.target
 # Before=network-online.target
-
-# Example: Email notifications on failure (requires mail configured)
-# [Service]
-# OnFailure=status-email-admin@%n.service

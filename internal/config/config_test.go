@@ -10,19 +10,17 @@ import (
 
 func TestLoadConfig_Success(t *testing.T) {
 	// Create a temporary config file
-	content := `
-refresh_rate: 0.5
-sync_rate: 2.0
-domains:
-  - zone_name: "example.com"
-    records:
-      - name: "example.com"
-        type: "A"
-        proxied: false
-      - name: "www.example.com"
-        type: "A"
-        proxied: true
-`
+	content := "refresh_rate: 0.5\n" +
+		"sync_rate: 2.0\n" +
+		"domains:\n" +
+		"  - zone_name: \"example.com\"\n" +
+		"    records:\n" +
+		"      - name: \"@\"\n" +
+		"        type: \"A\"\n" +
+		"        proxied: false\n" +
+		"      - name: \"www\"\n" +
+		"        type: \"A\"\n" +
+		"        proxied: true\n"
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yaml")
 
@@ -56,8 +54,8 @@ domains:
 		t.Fatalf("Expected 2 records, got %d", len(domain.Records))
 	}
 
-	if domain.Records[0].Name != "example.com" {
-		t.Errorf("Expected record name 'example.com', got '%s'", domain.Records[0].Name)
+	if domain.Records[0].Name != "@" {
+		t.Errorf("Expected record name '@', got '%s'", domain.Records[0].Name)
 	}
 
 	if domain.Records[0].Type != "A" {
@@ -103,7 +101,7 @@ func TestValidate_InvalidRefreshRate(t *testing.T) {
 			{
 				ZoneName: "example.com",
 				Records: []config.Record{
-					{Name: "example.com", Type: "A", Proxied: false},
+					{Name: "@", Type: "A", Proxied: false},
 				},
 			},
 		},
@@ -123,7 +121,7 @@ func TestValidate_InvalidSyncRate(t *testing.T) {
 			{
 				ZoneName: "example.com",
 				Records: []config.Record{
-					{Name: "example.com", Type: "A", Proxied: false},
+					{Name: "@", Type: "A", Proxied: false},
 				},
 			},
 		},
@@ -214,7 +212,7 @@ func TestValidate_InvalidRecordType(t *testing.T) {
 			{
 				ZoneName: "example.com",
 				Records: []config.Record{
-					{Name: "example.com", Type: "CNAME", Proxied: false},
+					{Name: "@", Type: "CNAME", Proxied: false},
 				},
 			},
 		},
@@ -235,7 +233,7 @@ func TestValidate_AAAAWithoutIPv6Support(t *testing.T) {
 			{
 				ZoneName: "example.com",
 				Records: []config.Record{
-					{Name: "example.com", Type: "AAAA", Proxied: false},
+					{Name: "@", Type: "AAAA", Proxied: false},
 				},
 			},
 		},
@@ -256,8 +254,8 @@ func TestValidate_ValidConfig(t *testing.T) {
 			{
 				ZoneName: "example.com",
 				Records: []config.Record{
-					{Name: "example.com", Type: "A", Proxied: false},
-					{Name: "www.example.com", Type: "AAAA", Proxied: true},
+					{Name: "@", Type: "A", Proxied: false},
+					{Name: "www", Type: "AAAA", Proxied: true},
 				},
 			},
 		},
@@ -278,13 +276,13 @@ func TestValidate_MultipleDomainsValid(t *testing.T) {
 			{
 				ZoneName: "example.com",
 				Records: []config.Record{
-					{Name: "example.com", Type: "A", Proxied: false},
+					{Name: "@", Type: "A", Proxied: false},
 				},
 			},
 			{
 				ZoneName: "example.org",
 				Records: []config.Record{
-					{Name: "example.org", Type: "AAAA", Proxied: true},
+					{Name: "@", Type: "AAAA", Proxied: true},
 				},
 			},
 		},
@@ -293,5 +291,41 @@ func TestValidate_MultipleDomainsValid(t *testing.T) {
 	err := cfg.Validate()
 	if err != nil {
 		t.Fatalf("Expected no error for valid multi-domain config, got: %v", err)
+	}
+}
+
+func TestValidate_RefreshRateTooHigh(t *testing.T) {
+	cfg := &config.Config{
+		RefreshRate: 1e20,
+		SyncRate:    1.0,
+		Domains: []config.Domain{
+			{
+				ZoneName: "example.com",
+				Records:  []config.Record{{Name: "@", Type: "A", Proxied: false}},
+			},
+		},
+	}
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("Expected error for refresh_rate that produces invalid interval, got nil")
+	}
+}
+
+func TestValidate_SyncRateTooHigh(t *testing.T) {
+	cfg := &config.Config{
+		RefreshRate: 1.0,
+		SyncRate:    1e20,
+		Domains: []config.Domain{
+			{
+				ZoneName: "example.com",
+				Records:  []config.Record{{Name: "@", Type: "A", Proxied: false}},
+			},
+		},
+	}
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("Expected error for sync_rate that produces invalid interval, got nil")
 	}
 }

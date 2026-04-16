@@ -68,55 +68,29 @@ func (r *RealCloudflareClient) DeleteDNSRecord(ctx context.Context, recordID str
 	return r.client.DNS.Records.Delete(ctx, recordID, params)
 }
 
-type DNSRecordType string
-
-func (r DNSRecordType) String() string {
-	return string(r)
-}
-
-const (
-	ARecord    DNSRecordType = "A"
-	AAAARecord DNSRecordType = "AAAA"
-)
-
-// DNSRecord represents a DNS record configuration
-type DNSRecord struct {
-	Root    string
-	Name    string
-	Type    DNSRecordType
-	Proxied bool
-}
-
-// Domain represents a domain with its DNS records
-type Domain struct {
-	ZoneID   string
-	ZoneName string
-	Records  []DNSRecord
-}
-
-// DNSManager handles Cloudflare DNS operations
-type DNSManager struct {
+// CloudflareProvider handles Cloudflare DNS operations
+type CloudflareProvider struct {
 	client CloudflareClient
 }
 
-// NewDNSManager creates a new DNS manager instance
-func NewDNSManager(apiToken string) (*DNSManager, error) {
+// NewCloudflareProvider creates a new Cloudflare provider instance
+func NewCloudflareProvider(apiToken string) (*CloudflareProvider, error) {
 	client := NewRealCloudflareClient(apiToken)
-	return &DNSManager{
+	return &CloudflareProvider{
 		client: client,
 	}, nil
 }
 
-// NewDNSManagerWithClient creates a new DNS manager with a custom client (for testing)
-func NewDNSManagerWithClient(client CloudflareClient) *DNSManager {
-	return &DNSManager{
+// NewCloudflareProviderWithClient creates a new Cloudflare provider with a custom client (for testing)
+func NewCloudflareProviderWithClient(client CloudflareClient) *CloudflareProvider {
+	return &CloudflareProvider{
 		client: client,
 	}
 }
 
 // GetZoneIDByName retrieves the Zone ID for a given zone name
-func (m *DNSManager) GetZoneIDByName(ctx context.Context, zoneName string) (string, error) {
-	zones, err := m.client.ListZones(ctx, zones.ZoneListParams{Name: cloudflare.String(zoneName)})
+func (p *CloudflareProvider) GetZoneIDByName(ctx context.Context, zoneName string) (string, error) {
+	zones, err := p.client.ListZones(ctx, zones.ZoneListParams{Name: cloudflare.String(zoneName)})
 	if err != nil {
 		return "", fmt.Errorf("failed to list zones: %w", err)
 	}
@@ -127,8 +101,8 @@ func (m *DNSManager) GetZoneIDByName(ctx context.Context, zoneName string) (stri
 }
 
 // GetDNSRecords retrieves all DNS records for a domain
-func (m *DNSManager) GetDNSRecords(ctx context.Context, zoneID string) ([]dns.RecordResponse, error) {
-	records, err := m.client.ListDNSRecords(ctx, dns.RecordListParams{ZoneID: cloudflare.String(zoneID)})
+func (p *CloudflareProvider) GetDNSRecords(ctx context.Context, zoneID string) ([]dns.RecordResponse, error) {
+	records, err := p.client.ListDNSRecords(ctx, dns.RecordListParams{ZoneID: cloudflare.String(zoneID)})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list DNS records: %w", err)
 	}
@@ -203,8 +177,8 @@ func prepareRecordKey(record DNSRecord) string {
 }
 
 // EnsureDNSRecords checks if the DNS records match the provided IPs and creates or updates them as necessary
-func (m *DNSManager) EnsureDNSRecords(ctx context.Context, zoneID string, records []DNSRecord, ipv4, ipv6 string) error {
-	existingRecords, err := m.GetDNSRecords(ctx, zoneID)
+func (p *CloudflareProvider) EnsureDNSRecords(ctx context.Context, zoneID string, records []DNSRecord, ipv4, ipv6 string) error {
+	existingRecords, err := p.GetDNSRecords(ctx, zoneID)
 	if err != nil {
 		return fmt.Errorf("failed to get existing DNS records: %w", err)
 	}
@@ -265,7 +239,7 @@ func (m *DNSManager) EnsureDNSRecords(ctx context.Context, zoneID string, record
 		batchReq.Puts = cloudflare.F(prepareBatchUpdate(recordsToUpdate, ipv4, ipv6))
 	}
 
-	_, err = m.client.BatchDNSRecords(ctx, batchReq)
+	_, err = p.client.BatchDNSRecords(ctx, batchReq)
 	if err != nil {
 		return fmt.Errorf("failed to execute batch DNS record update: %w", err)
 	}
@@ -274,8 +248,8 @@ func (m *DNSManager) EnsureDNSRecords(ctx context.Context, zoneID string, record
 }
 
 // DeleteDNSRecord deletes a DNS record by ID
-func (m *DNSManager) DeleteDNSRecord(ctx context.Context, zoneID, recordID string) error {
-	_, err := m.client.DeleteDNSRecord(ctx, recordID, dns.RecordDeleteParams{
+func (p *CloudflareProvider) DeleteDNSRecord(ctx context.Context, zoneID, recordID string) error {
+	_, err := p.client.DeleteDNSRecord(ctx, recordID, dns.RecordDeleteParams{
 		ZoneID: cloudflare.String(zoneID),
 	})
 	if err != nil {

@@ -1,38 +1,48 @@
-# IP Watcher Configuration
+# ipwatcher configuration example
 
-# Refresh rate: How many times per second to check for IP changes (e.g., 0.1 = once every 10 seconds)
+# Check for IP changes every 10 seconds.
 refresh_rate: 0.1
 
-# Sync rate: How many times per minute to verify DNS records are up-to-date (e.g., 1 = once per minute)
+# Reconcile DNS every minute even if the IP has not changed.
 sync_rate: 1
 
-# DNS Records to manage
-# Each domain must have a zone_id (found in Cloudflare dashboard)
+# Set to true only if this host has working public IPv6 connectivity.
+# Required for any AAAA records.
+supports_ipv6: false
+
 domains:
+  # Cloudflare example
   - zone_name: "example.com"
+    provider: "cloudflare" # Optional; defaults to cloudflare when omitted.
     records:
-      - name: "@"  # Root domain
-        type: A              # IPv4
-        proxied: false       # Whether to proxy through Cloudflare
-      - name: "@"
-        type: AAAA           # IPv6
-        proxied: false
-      - name: "www"  # Subdomain
-        type: A
-        proxied: true
-      - name: "www"
-        type: AAAA
-        proxied: true
-      - name: "api"
+      - name: "@"          # example.com
         type: A
         proxied: false
-      - name: "vpn"
+      - name: "www"        # www.example.com
+        type: A
+        proxied: true
+      - name: "api"        # api.example.com
         type: A
         proxied: false
 
-  # Add more domains as needed
-  # - zone_name: "another-domain.com"
+  # Route 53 example
+  - zone_name: "example.net"
+    provider: "route53"
+    records:
+      - name: "home"       # home.example.net
+        type: A
+      - name: "vpn"        # vpn.example.net
+        type: A
+
+  # IPv6 example (requires supports_ipv6: true)
+  # - zone_name: "example.org"
+  #   provider: "cloudflare"
   #   records:
   #     - name: "@"
-  #       type: A
+  #       type: AAAA
   #       proxied: false
+
+# Notes:
+# - Use "@" for the zone apex.
+# - Use a relative label like "www" or "vpn" for subdomains.
+# - The proxied flag is used only by Cloudflare and is ignored by Route 53.

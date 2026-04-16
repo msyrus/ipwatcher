@@ -38,7 +38,7 @@ func TestIntegration_GetZoneIDByName(t *testing.T) {
 
 	apiToken, expectedZoneID, zoneName := skipIfNoCredentials(t)
 
-	manager, err := dnsmanager.NewDNSManager(apiToken)
+	manager, err := dnsmanager.NewCloudflareProvider(apiToken)
 	if err != nil {
 		t.Fatalf("Failed to create DNS manager: %v", err)
 	}
@@ -63,7 +63,7 @@ func TestIntegration_GetZoneIDByName_NotFound(t *testing.T) {
 
 	apiToken, _, _ := skipIfNoCredentials(t)
 
-	manager, err := dnsmanager.NewDNSManager(apiToken)
+	manager, err := dnsmanager.NewCloudflareProvider(apiToken)
 	if err != nil {
 		t.Fatalf("Failed to create DNS manager: %v", err)
 	}
@@ -84,7 +84,7 @@ func TestIntegration_GetDNSRecords(t *testing.T) {
 
 	apiToken, zoneID, _ := skipIfNoCredentials(t)
 
-	manager, err := dnsmanager.NewDNSManager(apiToken)
+	manager, err := dnsmanager.NewCloudflareProvider(apiToken)
 	if err != nil {
 		t.Fatalf("Failed to create DNS manager: %v", err)
 	}
@@ -112,7 +112,7 @@ func TestIntegration_EnsureDNSRecords_CreateAndUpdate(t *testing.T) {
 
 	apiToken, zoneID, zoneName := skipIfNoCredentials(t)
 
-	manager, err := dnsmanager.NewDNSManager(apiToken)
+	manager, err := dnsmanager.NewCloudflareProvider(apiToken)
 	if err != nil {
 		t.Fatalf("Failed to create DNS manager: %v", err)
 	}
@@ -247,7 +247,7 @@ func TestIntegration_EnsureDNSRecords_NoUpdatesNeeded(t *testing.T) {
 
 	apiToken, zoneID, zoneName := skipIfNoCredentials(t)
 
-	manager, err := dnsmanager.NewDNSManager(apiToken)
+	manager, err := dnsmanager.NewCloudflareProvider(apiToken)
 	if err != nil {
 		t.Fatalf("Failed to create DNS manager: %v", err)
 	}
@@ -304,7 +304,7 @@ func TestIntegration_EnsureDNSRecords_ProxiedToggle(t *testing.T) {
 
 	apiToken, zoneID, zoneName := skipIfNoCredentials(t)
 
-	manager, err := dnsmanager.NewDNSManager(apiToken)
+	manager, err := dnsmanager.NewCloudflareProvider(apiToken)
 	if err != nil {
 		t.Fatalf("Failed to create DNS manager: %v", err)
 	}
@@ -382,7 +382,7 @@ func TestIntegration_EnsureDNSRecords_EmptyIPs(t *testing.T) {
 
 	apiToken, zoneID, zoneName := skipIfNoCredentials(t)
 
-	manager, err := dnsmanager.NewDNSManager(apiToken)
+	manager, err := dnsmanager.NewCloudflareProvider(apiToken)
 	if err != nil {
 		t.Fatalf("Failed to create DNS manager: %v", err)
 	}

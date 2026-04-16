@@ -73,7 +73,7 @@ func TestDNSRecordType_String(t *testing.T) {
 	}
 }
 
-func TestNewDNSManager(t *testing.T) {
+func TestNewCloudflareProvider(t *testing.T) {
 	tests := []struct {
 		name      string
 		apiToken  string
@@ -98,7 +98,7 @@ func TestNewDNSManager(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			manager, err := dnsmanager.NewDNSManager(tt.apiToken)
+			manager, err := dnsmanager.NewCloudflareProvider(tt.apiToken)
 
 			if tt.wantError && err == nil {
 				t.Error("Expected error but got nil")
@@ -109,7 +109,7 @@ func TestNewDNSManager(t *testing.T) {
 			}
 
 			if !tt.wantError && manager == nil {
-				t.Error("NewDNSManager returned nil manager")
+				t.Error("NewCloudflareProvider returned nil manager")
 			}
 		})
 	}
@@ -180,7 +180,7 @@ func TestGetZoneIDByName_WithMock(t *testing.T) {
 				},
 			}
 
-			manager := dnsmanager.NewDNSManagerWithClient(mockClient)
+			manager := dnsmanager.NewCloudflareProviderWithClient(mockClient)
 			ctx := context.Background()
 
 			zoneID, err := manager.GetZoneIDByName(ctx, tt.zoneName)
@@ -256,7 +256,7 @@ func TestGetDNSRecords_WithMock(t *testing.T) {
 				},
 			}
 
-			manager := dnsmanager.NewDNSManagerWithClient(mockClient)
+			manager := dnsmanager.NewCloudflareProviderWithClient(mockClient)
 			ctx := context.Background()
 
 			records, err := manager.GetDNSRecords(ctx, tt.zoneID)
@@ -355,7 +355,7 @@ func TestDomain_Structure(t *testing.T) {
 func TestGetZoneIDByName_ErrorHandling(t *testing.T) {
 	// This test verifies that we handle errors properly
 	// In a real scenario, this would use dependency injection
-	manager, err := dnsmanager.NewDNSManager("test-token")
+	manager, err := dnsmanager.NewCloudflareProvider("test-token")
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
@@ -372,7 +372,7 @@ func TestGetZoneIDByName_ErrorHandling(t *testing.T) {
 
 func TestGetDNSRecords_ErrorHandling(t *testing.T) {
 	// This test verifies that we handle errors properly
-	manager, err := dnsmanager.NewDNSManager("test-token")
+	manager, err := dnsmanager.NewCloudflareProvider("test-token")
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
@@ -388,7 +388,7 @@ func TestGetDNSRecords_ErrorHandling(t *testing.T) {
 }
 
 func TestEnsureDNSRecords_EmptyRecords(t *testing.T) {
-	manager, err := dnsmanager.NewDNSManager("test-token")
+	manager, err := dnsmanager.NewCloudflareProvider("test-token")
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
@@ -407,7 +407,7 @@ func TestEnsureDNSRecords_EmptyRecords(t *testing.T) {
 }
 
 func TestDeleteDNSRecord_ErrorHandling(t *testing.T) {
-	manager, err := dnsmanager.NewDNSManager("test-token")
+	manager, err := dnsmanager.NewCloudflareProvider("test-token")
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
@@ -422,7 +422,7 @@ func TestDeleteDNSRecord_ErrorHandling(t *testing.T) {
 }
 
 func TestEnsureDNSRecords_WithARecordOnly(t *testing.T) {
-	manager, err := dnsmanager.NewDNSManager("test-token")
+	manager, err := dnsmanager.NewCloudflareProvider("test-token")
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
@@ -446,7 +446,7 @@ func TestEnsureDNSRecords_WithARecordOnly(t *testing.T) {
 }
 
 func TestEnsureDNSRecords_WithAAAARecordOnly(t *testing.T) {
-	manager, err := dnsmanager.NewDNSManager("test-token")
+	manager, err := dnsmanager.NewCloudflareProvider("test-token")
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
@@ -470,7 +470,7 @@ func TestEnsureDNSRecords_WithAAAARecordOnly(t *testing.T) {
 }
 
 func TestEnsureDNSRecords_WithBothRecordTypes(t *testing.T) {
-	manager, err := dnsmanager.NewDNSManager("test-token")
+	manager, err := dnsmanager.NewCloudflareProvider("test-token")
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
@@ -500,7 +500,7 @@ func TestEnsureDNSRecords_WithBothRecordTypes(t *testing.T) {
 }
 
 func TestEnsureDNSRecords_SkipsARecordWhenNoIPv4(t *testing.T) {
-	manager, err := dnsmanager.NewDNSManager("test-token")
+	manager, err := dnsmanager.NewCloudflareProvider("test-token")
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
@@ -529,7 +529,7 @@ func TestEnsureDNSRecords_SkipsARecordWhenNoIPv4(t *testing.T) {
 }
 
 func TestEnsureDNSRecords_SkipsAAAARecordWhenNoIPv6(t *testing.T) {
-	manager, err := dnsmanager.NewDNSManager("test-token")
+	manager, err := dnsmanager.NewCloudflareProvider("test-token")
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
@@ -558,7 +558,7 @@ func TestEnsureDNSRecords_SkipsAAAARecordWhenNoIPv6(t *testing.T) {
 }
 
 func TestEnsureDNSRecords_MultipleSubdomains(t *testing.T) {
-	manager, err := dnsmanager.NewDNSManager("test-token")
+	manager, err := dnsmanager.NewCloudflareProvider("test-token")
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
@@ -592,7 +592,7 @@ func TestEnsureDNSRecords_MultipleSubdomains(t *testing.T) {
 }
 
 func TestEnsureDNSRecords_RootDomain(t *testing.T) {
-	manager, err := dnsmanager.NewDNSManager("test-token")
+	manager, err := dnsmanager.NewCloudflareProvider("test-token")
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
@@ -667,7 +667,7 @@ func TestEnsureDNSRecords_ProxiedVariations(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			manager, err := dnsmanager.NewDNSManager("test-token")
+			manager, err := dnsmanager.NewCloudflareProvider("test-token")
 			if err != nil {
 				t.Fatalf("Failed to create manager: %v", err)
 			}
@@ -714,7 +714,7 @@ func TestEnsureDNSRecords_DifferentIPFormats(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			manager, err := dnsmanager.NewDNSManager("test-token")
+			manager, err := dnsmanager.NewCloudflareProvider("test-token")
 			if err != nil {
 				t.Fatalf("Failed to create manager: %v", err)
 			}
@@ -742,7 +742,7 @@ func TestEnsureDNSRecords_DifferentIPFormats(t *testing.T) {
 }
 
 func TestEnsureDNSRecords_InvalidZoneID(t *testing.T) {
-	manager, err := dnsmanager.NewDNSManager("test-token")
+	manager, err := dnsmanager.NewCloudflareProvider("test-token")
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
@@ -786,7 +786,7 @@ func TestEnsureDNSRecords_InvalidZoneID(t *testing.T) {
 }
 
 func TestEnsureDNSRecords_ContextCancellation(t *testing.T) {
-	manager, err := dnsmanager.NewDNSManager("test-token")
+	manager, err := dnsmanager.NewCloudflareProvider("test-token")
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}

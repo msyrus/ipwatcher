@@ -20,7 +20,7 @@ import (
 type IPWatcher struct {
 	config        *config.Config
 	ipFetcher     *ipfetcher.IPFetcher
-	dnsManager    *dnsmanager.DNSManager
+	providers     map[string]dnsmanager.DNSProvider
 	zoneCache     *sync.Map // zone name -> zone ID cache
 	currentIPv4   *atomic.Value
 	currentIPv6   *atomic.Value
@@ -29,16 +29,46 @@ type IPWatcher struct {
 }
 
 // NewIPWatcher creates a new IP watcher instance
-func NewIPWatcher(cfg *config.Config, apiToken string) (*IPWatcher, error) {
-	dnsManager, err := dnsmanager.NewDNSManager(apiToken)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create DNS manager: %w", err)
+func NewIPWatcher(ctx context.Context, cfg *config.Config, apiToken string) (*IPWatcher, error) {
+	providers := make(map[string]dnsmanager.DNSProvider)
+
+	// Determine which providers are needed
+	cloudflareNeeded := false
+	route53Needed := false
+	for _, d := range cfg.Domains {
+		switch d.Provider {
+		case "cloudflare":
+			cloudflareNeeded = true
+		case "route53":
+			route53Needed = true
+		}
+	}
+
+	// Initialize Cloudflare provider if needed
+	if cloudflareNeeded {
+		if apiToken == "" {
+			return nil, fmt.Errorf("CLOUDFLARE_API_TOKEN environment variable is required when using the cloudflare provider")
+		}
+		cfProvider, err := dnsmanager.NewCloudflareProvider(apiToken)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create Cloudflare provider: %w", err)
+		}
+		providers["cloudflare"] = cfProvider
+	}
+
+	// Initialize Route53 provider if needed
+	if route53Needed {
+		r53Provider, err := dnsmanager.NewRoute53Provider(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create Route53 provider: %w", err)
+		}
+		providers["route53"] = r53Provider
 	}
 
 	return &IPWatcher{
 		config:      cfg,
 		ipFetcher:   ipfetcher.NewIPFetcher(),
-		dnsManager:  dnsManager,
+		providers:   providers,
 		zoneCache:   &sync.Map{},
 		currentIPv4: &atomic.Value{},
 		currentIPv6: &atomic.Value{},
@@ -154,21 +184,27 @@ func (w *IPWatcher) checkAndUpdateIP(ctx context.Context) error {
 }
 
 // getZoneID retrieves the zone ID for a domain, using cache if available
-func (w *IPWatcher) getZoneID(ctx context.Context, zoneName string) (string, error) {
-	zoneID, exists := w.zoneCache.Load(zoneName)
+func (w *IPWatcher) getZoneID(ctx context.Context, zoneName, providerType string) (string, error) {
+	cacheKey := providerType + ":" + zoneName
+	zoneID, exists := w.zoneCache.Load(cacheKey)
 
 	if exists {
 		return zoneID.(string), nil
 	}
 
-	// Fetch zone ID from Cloudflare
-	zID, err := w.dnsManager.GetZoneIDByName(ctx, zoneName)
+	provider, ok := w.providers[providerType]
+	if !ok {
+		return "", fmt.Errorf("unsupported provider: %s", providerType)
+	}
+
+	// Fetch zone ID from provider
+	zID, err := provider.GetZoneIDByName(ctx, zoneName)
 	if err != nil {
 		return "", err
 	}
 
 	// Cache it
-	w.zoneCache.Store(zoneName, zID)
+	w.zoneCache.Store(cacheKey, zID)
 
 	return zID, nil
 }
@@ -180,10 +216,16 @@ func (w *IPWatcher) updateAllDNSRecords(ctx context.Context) error {
 
 	var lastErr error
 	for _, domain := range w.config.Domains {
+		provider, ok := w.providers[domain.Provider]
+		if !ok {
+			log.Printf("Unsupported provider %s for domain %s", domain.Provider, domain.ZoneName)
+			continue
+		}
+
 		// Get zone ID
-		zoneID, err := w.getZoneID(ctx, domain.ZoneName)
+		zoneID, err := w.getZoneID(ctx, domain.ZoneName, domain.Provider)
 		if err != nil {
-			log.Printf("Failed to get zone ID for %s: %v", domain.ZoneName, err)
+			log.Printf("Failed to get zone ID for %s (%s): %v", domain.ZoneName, domain.Provider, err)
 			lastErr = err
 			continue
 		}
@@ -200,11 +242,11 @@ func (w *IPWatcher) updateAllDNSRecords(ctx context.Context) error {
 		}
 
 		// Use EnsureDNSRecords to batch create/update
-		if err := w.dnsManager.EnsureDNSRecords(ctx, zoneID, dnsRecords, ipv4, ipv6); err != nil {
-			log.Printf("Failed to ensure DNS records for %s: %v", domain.ZoneName, err)
+		if err := provider.EnsureDNSRecords(ctx, zoneID, dnsRecords, ipv4, ipv6); err != nil {
+			log.Printf("Failed to ensure DNS records for %s (%s): %v", domain.ZoneName, domain.Provider, err)
 			lastErr = err
 		} else {
-			log.Printf("DNS records for %s updated successfully", domain.ZoneName)
+			log.Printf("DNS records for %s (%s) updated successfully", domain.ZoneName, domain.Provider)
 		}
 	}
 
@@ -220,10 +262,16 @@ func (w *IPWatcher) verifyDNSRecords(ctx context.Context) error {
 
 	var lastErr error
 	for _, domain := range w.config.Domains {
+		provider, ok := w.providers[domain.Provider]
+		if !ok {
+			log.Printf("Unsupported provider %s for domain %s", domain.Provider, domain.ZoneName)
+			continue
+		}
+
 		// Get zone ID
-		zoneID, err := w.getZoneID(ctx, domain.ZoneName)
+		zoneID, err := w.getZoneID(ctx, domain.ZoneName, domain.Provider)
 		if err != nil {
-			log.Printf("Failed to get zone ID for %s: %v", domain.ZoneName, err)
+			log.Printf("Failed to get zone ID for %s (%s): %v", domain.ZoneName, domain.Provider, err)
 			lastErr = err
 			continue
 		}
@@ -240,11 +288,11 @@ func (w *IPWatcher) verifyDNSRecords(ctx context.Context) error {
 		}
 
 		// Use EnsureDNSRecords which will update only if needed
-		if err := w.dnsManager.EnsureDNSRecords(ctx, zoneID, dnsRecords, ipv4, ipv6); err != nil {
-			log.Printf("Failed to verify/update DNS records for %s: %v", domain.ZoneName, err)
+		if err := provider.EnsureDNSRecords(ctx, zoneID, dnsRecords, ipv4, ipv6); err != nil {
+			log.Printf("Failed to verify/update DNS records for %s (%s): %v", domain.ZoneName, domain.Provider, err)
 			lastErr = err
 		} else {
-			log.Printf("DNS records for %s are up-to-date", domain.ZoneName)
+			log.Printf("DNS records for %s (%s) are up-to-date", domain.ZoneName, domain.Provider)
 		}
 	}
 
@@ -265,19 +313,16 @@ func main() {
 
 	// Get Cloudflare API token
 	apiToken := os.Getenv("CLOUDFLARE_API_TOKEN")
-	if apiToken == "" {
-		log.Fatal("CLOUDFLARE_API_TOKEN environment variable is required")
-	}
+
+	// Create signal handling context
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// Create IP watcher
-	watcher, err := NewIPWatcher(cfg, apiToken)
+	watcher, err := NewIPWatcher(ctx, cfg, apiToken)
 	if err != nil {
 		log.Fatalf("Failed to create IP watcher: %v", err)
 	}
-
-	// Set up signal handling for graceful shutdown
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
