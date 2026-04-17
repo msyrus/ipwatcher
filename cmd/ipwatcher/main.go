@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -15,6 +16,9 @@ import (
 	"github.com/msyrus/ipwatcher/internal/dnsmanager"
 	"github.com/msyrus/ipwatcher/internal/ipfetcher"
 )
+
+// version is set at build time via -ldflags "-X main.version=vX.Y.Z"
+var version = "dev"
 
 // IPWatcher manages the IP monitoring and DNS update process
 type IPWatcher struct {
@@ -300,6 +304,14 @@ func (w *IPWatcher) verifyDNSRecords(ctx context.Context) error {
 }
 
 func main() {
+	showVersion := flag.Bool("version", false, "Print version and exit")
+	flag.Parse()
+
+	if *showVersion {
+		fmt.Println(version)
+		return
+	}
+
 	// Load configuration
 	configFile := os.Getenv("CONFIG_FILE")
 	if configFile == "" {

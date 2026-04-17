@@ -7,7 +7,7 @@
 *.dll
 *.so
 *.dylib
-ipwatcher
+/ipwatcher
 
 # Test binary, built with `go test -c`
 *.test
@@ -42,3 +42,6 @@ docker-compose.override.yml
 # Editor/IDE
 # .idea/
 # .vscode/
+
+!cmd/ipwatcher/
+!cmd/ipwatcher/**
