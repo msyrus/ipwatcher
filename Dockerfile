@@ -29,6 +29,12 @@ RUN go build \
 # Final stage
 FROM scratch
 
+LABEL org.opencontainers.image.title="ipwatcher" \
+    org.opencontainers.image.description="Monitors public IP changes and keeps Cloudflare and Route 53 DNS A/AAAA records in sync." \
+    org.opencontainers.image.source="https://github.com/msyrus/ipwatcher" \
+    org.opencontainers.image.documentation="https://github.com/msyrus/ipwatcher/blob/main/README.md" \
+    org.opencontainers.image.url="https://hub.docker.com/r/msyrus/ipwatcher"
+
 # Copy timezone data
 COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
 
