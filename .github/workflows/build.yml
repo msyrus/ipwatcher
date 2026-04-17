@@ -94,6 +94,7 @@ jobs:
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         files: ./coverage.out
+        flags: unit
 
   integration-test-cloudflare:
     name: Integration Tests (Cloudflare)
@@ -129,6 +130,14 @@ jobs:
       if: ${{ env.CLOUDFLARE_API_TOKEN && env.CLOUDFLARE_TEST_ZONE_ID && env.CLOUDFLARE_TEST_ZONE_NAME }}
       run: make test-integration-cloudflare
 
+    - name: Upload Cloudflare integration coverage to Codecov
+      if: github.repository == 'msyrus/ipwatcher'
+      uses: codecov/codecov-action@v6
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        files: ./coverage-cloudflare.out
+        flags: integration-cloudflare
+
   integration-test-route53:
     name: Integration Tests (Route53)
     runs-on: ubuntu-latest
@@ -163,6 +172,14 @@ jobs:
         AWS_REGION: ${{ secrets.AWS_REGION }}
       if: ${{ env.ROUTE53_TEST_ZONE_NAME && env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY && env.AWS_REGION }}
       run: make test-integration-route53
+
+    - name: Upload Route53 integration coverage to Codecov
+      if: github.repository == 'msyrus/ipwatcher'
+      uses: codecov/codecov-action@v6
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        files: ./coverage-route53.out
+        flags: integration-route53
 
   build:
     name: Build

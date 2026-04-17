@@ -108,7 +108,7 @@ test-integration-cloudflare:
 		echo "  - CLOUDFLARE_TEST_ZONE_NAME"; \
 		exit 1; \
 	fi
-	@$(GO) test -v -p 1 -parallel 1 -tags=integration $(PKG_DNSMANAGER) -run '$(CLOUDFLARE_INTEGRATION_RUN)'
+	@$(GO) test -v -p 1 -parallel 1 -tags=integration $(PKG_DNSMANAGER) -run '$(CLOUDFLARE_INTEGRATION_RUN)' -coverprofile=coverage-cloudflare.out -covermode=atomic
 
 # Run Route53 integration tests only
 test-integration-route53:
@@ -118,7 +118,7 @@ test-integration-route53:
 		echo "AWS credentials are resolved by the standard AWS SDK credential chain."; \
 		exit 1; \
 	fi
-	@$(GO) test -v -p 1 -parallel 1 -tags=integration $(PKG_DNSMANAGER) -run '$(ROUTE53_INTEGRATION_RUN)'
+	@$(GO) test -v -p 1 -parallel 1 -tags=integration $(PKG_DNSMANAGER) -run '$(ROUTE53_INTEGRATION_RUN)' -coverprofile=coverage-route53.out -covermode=atomic
 
 # Format code
 fmt:
