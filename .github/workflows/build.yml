@@ -204,7 +204,7 @@ jobs:
   docker:
     name: Build Docker Image
     runs-on: ubuntu-latest
-    needs: [unit-test, integration-test-cloudflare, integration-test-route53]
+    needs: [version, unit-test, integration-test-cloudflare, integration-test-route53]
     # Allow Docker build to proceed even if integration tests are skipped
     if: |
       always() &&
@@ -225,19 +225,30 @@ jobs:
         username: ${{ secrets.DOCKER_HUB_USERNAME }}
         password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
+    - name: Prepare Docker tags
+      id: docker_tags
+      env:
+        RELEASE_TAG: ${{ needs.version.outputs.release_tag }}
+      run: |
+        TAGS="msyrus/ipwatcher:latest"
+        if [ -n "$RELEASE_TAG" ]; then
+          TAGS="$TAGS,msyrus/ipwatcher:$RELEASE_TAG"
+        fi
+        echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
+
     - name: Build Docker image
       uses: docker/build-push-action@v7
       with:
         context: .
         push: true
-        tags: msyrus/ipwatcher:latest
+        tags: ${{ steps.docker_tags.outputs.tags }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
         platforms: linux/amd64,linux/arm64
 
     - name: Test Docker image
       run: |
-        docker images msyrus/ipwatcher:latest
+        docker images msyrus/ipwatcher
 
   release:
     name: Create Release
