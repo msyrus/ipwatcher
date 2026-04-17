@@ -23,7 +23,7 @@ var version = "dev"
 // IPWatcher manages the IP monitoring and DNS update process
 type IPWatcher struct {
 	config        *config.Config
-	ipFetcher     *ipfetcher.IPFetcher
+	ipFetcher     ipfetcher.Fetcher
 	providers     map[string]dnsmanager.DNSProvider
 	zoneCache     *sync.Map // zone name -> zone ID cache
 	currentIPv4   *atomic.Value
@@ -34,6 +34,11 @@ type IPWatcher struct {
 
 // NewIPWatcher creates a new IP watcher instance
 func NewIPWatcher(ctx context.Context, cfg *config.Config, apiToken string) (*IPWatcher, error) {
+	return NewIPWatcherWithFetcher(ctx, cfg, apiToken, ipfetcher.NewIPFetcher())
+}
+
+// NewIPWatcherWithFetcher creates a new IP watcher instance with a custom IP fetcher
+func NewIPWatcherWithFetcher(ctx context.Context, cfg *config.Config, apiToken string, fetcher ipfetcher.Fetcher) (*IPWatcher, error) {
 	providers := make(map[string]dnsmanager.DNSProvider)
 
 	// Determine which providers are needed
@@ -71,7 +76,7 @@ func NewIPWatcher(ctx context.Context, cfg *config.Config, apiToken string) (*IP
 
 	return &IPWatcher{
 		config:      cfg,
-		ipFetcher:   ipfetcher.NewIPFetcher(),
+		ipFetcher:   fetcher,
 		providers:   providers,
 		zoneCache:   &sync.Map{},
 		currentIPv4: &atomic.Value{},
@@ -79,12 +84,24 @@ func NewIPWatcher(ctx context.Context, cfg *config.Config, apiToken string) (*IP
 	}, nil
 }
 
+// NewIPWatcherWithDeps creates a new IP watcher with fully injected dependencies for testing
+func NewIPWatcherWithDeps(cfg *config.Config, fetcher ipfetcher.Fetcher, providers map[string]dnsmanager.DNSProvider) *IPWatcher {
+	return &IPWatcher{
+		config:      cfg,
+		ipFetcher:   fetcher,
+		providers:   providers,
+		zoneCache:   &sync.Map{},
+		currentIPv4: &atomic.Value{},
+		currentIPv6: &atomic.Value{},
+	}
+}
+
 // Run starts the IP watcher daemon
 func (w *IPWatcher) Run(ctx context.Context) error {
 	log.Println("Starting IP Watcher daemon...")
 
 	// Initial IP fetch
-	if err := w.fetchAndUpdateIPs(ctx); err != nil {
+	if err := w.FetchAndUpdateIPs(ctx); err != nil {
 		log.Printf("Warning: Initial IP fetch failed: %v", err)
 	}
 
@@ -108,20 +125,20 @@ func (w *IPWatcher) Run(ctx context.Context) error {
 			return ctx.Err()
 
 		case <-w.refreshTicker.C:
-			if err := w.checkAndUpdateIP(ctx); err != nil {
+			if err := w.CheckAndUpdateIP(ctx); err != nil {
 				log.Printf("Error checking IP: %v", err)
 			}
 
 		case <-w.syncTicker.C:
-			if err := w.verifyDNSRecords(ctx); err != nil {
+			if err := w.VerifyDNSRecords(ctx); err != nil {
 				log.Printf("Error verifying DNS records: %v", err)
 			}
 		}
 	}
 }
 
-// fetchAndUpdateIPs fetches current IPs and updates DNS if needed
-func (w *IPWatcher) fetchAndUpdateIPs(ctx context.Context) error {
+// FetchAndUpdateIPs fetches current IPs and updates DNS if needed
+func (w *IPWatcher) FetchAndUpdateIPs(ctx context.Context) error {
 	// Fetch IPv4
 	ipv4, err := w.ipFetcher.GetIPv4(ctx)
 	if err != nil {
@@ -143,11 +160,11 @@ func (w *IPWatcher) fetchAndUpdateIPs(ctx context.Context) error {
 	}
 
 	// Update DNS records
-	return w.updateAllDNSRecords(ctx)
+	return w.UpdateAllDNSRecords(ctx)
 }
 
-// checkAndUpdateIP checks if IP has changed and updates DNS if needed
-func (w *IPWatcher) checkAndUpdateIP(ctx context.Context) error {
+// CheckAndUpdateIP checks if IP has changed and updates DNS if needed
+func (w *IPWatcher) CheckAndUpdateIP(ctx context.Context) error {
 	oldIPv4, _ := w.currentIPv4.Load().(string)
 	oldIPv6, _ := w.currentIPv6.Load().(string)
 
@@ -179,16 +196,19 @@ func (w *IPWatcher) checkAndUpdateIP(ctx context.Context) error {
 		w.currentIPv6.Store(newIPv6)
 	}
 	if ipv4Changed || ipv6Changed {
-		w.syncTicker.Reset(time.Duration(float64(time.Minute) / w.config.SyncRate)) // Reset sync ticker on IP change
+		// Reset sync ticker if it's running (initialized in Run())
+		if w.syncTicker != nil {
+			w.syncTicker.Reset(time.Duration(float64(time.Minute) / w.config.SyncRate))
+		}
 
-		return w.updateAllDNSRecords(ctx)
+		return w.UpdateAllDNSRecords(ctx)
 	}
 
 	return nil
 }
 
-// getZoneID retrieves the zone ID for a domain, using cache if available
-func (w *IPWatcher) getZoneID(ctx context.Context, zoneName, providerType string) (string, error) {
+// GetZoneID retrieves the zone ID for a domain, using cache if available
+func (w *IPWatcher) GetZoneID(ctx context.Context, zoneName, providerType string) (string, error) {
 	cacheKey := providerType + ":" + zoneName
 	zoneID, exists := w.zoneCache.Load(cacheKey)
 
@@ -213,8 +233,8 @@ func (w *IPWatcher) getZoneID(ctx context.Context, zoneName, providerType string
 	return zID, nil
 }
 
-// updateAllDNSRecords updates DNS records for all configured domains
-func (w *IPWatcher) updateAllDNSRecords(ctx context.Context) error {
+// UpdateAllDNSRecords updates DNS records for all configured domains
+func (w *IPWatcher) UpdateAllDNSRecords(ctx context.Context) error {
 	ipv4, _ := w.currentIPv4.Load().(string)
 	ipv6, _ := w.currentIPv6.Load().(string)
 
@@ -227,7 +247,7 @@ func (w *IPWatcher) updateAllDNSRecords(ctx context.Context) error {
 		}
 
 		// Get zone ID
-		zoneID, err := w.getZoneID(ctx, domain.ZoneName, domain.Provider)
+		zoneID, err := w.GetZoneID(ctx, domain.ZoneName, domain.Provider)
 		if err != nil {
 			log.Printf("Failed to get zone ID for %s (%s): %v", domain.ZoneName, domain.Provider, err)
 			lastErr = err
@@ -257,8 +277,8 @@ func (w *IPWatcher) updateAllDNSRecords(ctx context.Context) error {
 	return lastErr
 }
 
-// verifyDNSRecords verifies that all DNS records are up-to-date
-func (w *IPWatcher) verifyDNSRecords(ctx context.Context) error {
+// VerifyDNSRecords verifies that all DNS records are up-to-date
+func (w *IPWatcher) VerifyDNSRecords(ctx context.Context) error {
 	ipv4, _ := w.currentIPv4.Load().(string)
 	ipv6, _ := w.currentIPv6.Load().(string)
 
@@ -273,7 +293,7 @@ func (w *IPWatcher) verifyDNSRecords(ctx context.Context) error {
 		}
 
 		// Get zone ID
-		zoneID, err := w.getZoneID(ctx, domain.ZoneName, domain.Provider)
+		zoneID, err := w.GetZoneID(ctx, domain.ZoneName, domain.Provider)
 		if err != nil {
 			log.Printf("Failed to get zone ID for %s (%s): %v", domain.ZoneName, domain.Provider, err)
 			lastErr = err
@@ -303,28 +323,14 @@ func (w *IPWatcher) verifyDNSRecords(ctx context.Context) error {
 	return lastErr
 }
 
-func main() {
-	showVersion := flag.Bool("version", false, "Print version and exit")
-	flag.Parse()
-
-	if *showVersion {
-		fmt.Println(version)
-		return
-	}
-
+// Execute is the main entry point for running the IP watcher daemon
+// It loads configuration, creates the watcher, and runs it until interrupted
+func Execute(configFile, apiToken string) error {
 	// Load configuration
-	configFile := os.Getenv("CONFIG_FILE")
-	if configFile == "" {
-		configFile = "config.yaml"
-	}
-
 	cfg, err := config.LoadConfig(configFile)
 	if err != nil {
-		log.Fatalf("Failed to load configuration: %v", err)
+		return fmt.Errorf("failed to load configuration: %w", err)
 	}
-
-	// Get Cloudflare API token
-	apiToken := os.Getenv("CLOUDFLARE_API_TOKEN")
 
 	// Create signal handling context
 	ctx, cancel := context.WithCancel(context.Background())
@@ -333,7 +339,7 @@ func main() {
 	// Create IP watcher
 	watcher, err := NewIPWatcher(ctx, cfg, apiToken)
 	if err != nil {
-		log.Fatalf("Failed to create IP watcher: %v", err)
+		return fmt.Errorf("failed to create IP watcher: %w", err)
 	}
 
 	sigChan := make(chan os.Signal, 1)
@@ -347,8 +353,33 @@ func main() {
 
 	// Run the watcher
 	if err := watcher.Run(ctx); err != nil && err != context.Canceled {
-		log.Fatalf("IP watcher error: %v", err)
+		return fmt.Errorf("IP watcher error: %w", err)
 	}
 
 	log.Println("IP Watcher daemon stopped")
+	return nil
+}
+
+func main() {
+	showVersion := flag.Bool("version", false, "Print version and exit")
+	flag.Parse()
+
+	if *showVersion {
+		fmt.Println(version)
+		return
+	}
+
+	// Load configuration file path
+	configFile := os.Getenv("CONFIG_FILE")
+	if configFile == "" {
+		configFile = "config.yaml"
+	}
+
+	// Get Cloudflare API token
+	apiToken := os.Getenv("CLOUDFLARE_API_TOKEN")
+
+	// Execute the daemon
+	if err := Execute(configFile, apiToken); err != nil {
+		log.Fatalf("Error: %v", err)
+	}
 }

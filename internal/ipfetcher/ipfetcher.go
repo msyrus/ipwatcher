@@ -16,6 +16,12 @@ const (
 	timeout = 10 * time.Second
 )
 
+// Fetcher is an interface for fetching public IP addresses
+type Fetcher interface {
+	GetIPv4(ctx context.Context) (string, error)
+	GetIPv6(ctx context.Context) (string, error)
+}
+
 // IPFetcher handles fetching public IP addresses
 type IPFetcher struct {
 	client *http.Client
