@@ -95,6 +95,9 @@ jobs:
         token: ${{ secrets.CODECOV_TOKEN }}
         files: ./coverage.out
         flags: unit
+        name: unit-tests
+        fail_ci_if_error: false
+        verbose: true
 
   integration-test-cloudflare:
     name: Integration Tests (Cloudflare)
@@ -137,6 +140,9 @@ jobs:
         token: ${{ secrets.CODECOV_TOKEN }}
         files: ./coverage-cloudflare.out
         flags: integration-cloudflare
+        name: cloudflare-integration-tests
+        fail_ci_if_error: false
+        verbose: true
 
   integration-test-route53:
     name: Integration Tests (Route53)
@@ -180,6 +186,9 @@ jobs:
         token: ${{ secrets.CODECOV_TOKEN }}
         files: ./coverage-route53.out
         flags: integration-route53
+        name: route53-integration-tests
+        fail_ci_if_error: false
+        verbose: true
 
   build:
     name: Build

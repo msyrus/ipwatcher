@@ -1,0 +1,58 @@
+# Codecov configuration
+# Documentation: https://docs.codecov.com/docs/codecov-yaml
+
+# Coverage collection strategy
+coverage:
+  status:
+    project:
+      default:
+        # Require 80% coverage for the project
+        target: 80%
+        threshold: 1%
+        # Don't wait for all uploads since integration tests might be skipped
+        informational: true
+    patch:
+      default:
+        target: 70%
+        threshold: 1%
+        informational: true
+
+  # Precision for coverage percentages
+  precision: 2
+  round: down
+  range: "60...100"
+
+# Flag management - defines how different test types contribute
+flags:
+  unit:
+    # Don't carry forward unit tests - they run on every commit
+    carryforward: false
+    paths:
+      - internal/
+      - cmd/
+  integration-cloudflare:
+    # Carry forward if skipped (when secrets not available)
+    carryforward: true
+    paths:
+      - internal/dnsmanager/
+  integration-route53:
+    # Carry forward if skipped (when secrets not available)
+    carryforward: true
+    paths:
+      - internal/dnsmanager/
+
+# Comment configuration
+comment:
+  layout: "reach,diff,flags,tree"
+  behavior: default
+  require_changes: false
+  require_base: false
+  require_head: true
+
+# Ignore certain files from coverage
+ignore:
+  - "**/*_test.go"
+  - "**/*_integration_test.go"
+  - "**/testdata/**"
+  - "docs/**"
+  - "*.md"
