@@ -1,6 +1,6 @@
 # ipwatcher
 
-![ipwatcher logo](docs/assets/ipwatcher-logo.svg)
+![ipwatcher logo](docs/assets/ipwatcher-logo.png)
 
 [![Build and Test](https://github.com/msyrus/ipwatcher/actions/workflows/build.yml/badge.svg)](https://github.com/msyrus/ipwatcher/actions/workflows/build.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/msyrus/ipwatcher)](https://goreportcard.com/report/github.com/msyrus/ipwatcher)

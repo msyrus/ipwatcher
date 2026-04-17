@@ -63,3 +63,6 @@ go.work.sum
 
 # Makefile
 Makefile
+
+#Docs
+docs/
